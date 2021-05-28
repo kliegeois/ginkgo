@@ -48,6 +48,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ginkgo/core/base/utils.hpp>
 
 
+#include "accessor/row_major.hpp"
+
+
 namespace gko {
 namespace distributed {
 
@@ -163,6 +166,8 @@ public:
     using complex_type = to_complex<Dense>;
 
     using row_major_range = gko::range<gko::accessor::row_major<ValueType, 2>>;
+    using const_row_major_range =
+        gko::range<gko::accessor::row_major<const ValueType, 2>>;
 
     /**
      * Creates a Dense matrix with the same size and stride as another Dense
@@ -361,9 +366,9 @@ public:
         const Array<int64>* permutation_indices) const override;
 
     std::vector<std::unique_ptr<Dense>> get_block_approx(
-        const Array<size_type> &block_sizes,
-        const Overlap<size_type> &block_overlaps = {},
-        const Array<size_type> &permutation = {}) const override;
+        const Array<size_type>& block_sizes,
+        const Overlap<size_type>& block_overlaps = {},
+        const Array<size_type>& permutation = {}) const override;
 
     /**
      * Writes the row-permuted matrix into the given output matrix.
@@ -759,10 +764,11 @@ public:
      */
     std::unique_ptr<Dense> create_submatrix(const span& rows,
                                             const span& columns,
-                                            const size_type stride)
+                                            const size_type stride) const
     {
-        return this->create_submatrix_impl(rows, columns, stride);
+        return std::move(this->create_submatrix_impl(rows, columns, stride));
     }
+
 
     /**
      * Create a submatrix from the original matrix.
@@ -771,9 +777,9 @@ public:
      * @param columns  column span
      */
     std::unique_ptr<Dense> create_submatrix(const span& rows,
-                                            const span& columns)
+                                            const span& columns) const
     {
-        return create_submatrix(rows, columns, this->get_stride());
+        return std::move(create_submatrix(rows, columns, this->get_stride()));
     }
 
     /**
@@ -986,14 +992,34 @@ protected:
         auto range_result = range_this(rows, columns);
         // TODO: can result in HUGE padding - which will be copied with the
         // vector
-        return Dense::create(
+        return std::move(Dense::create(
             this->get_executor(),
             dim<2>{range_result.length(0), range_result.length(1)},
             Array<ValueType>::view(
                 this->get_executor(),
                 range_result.length(0) * range_this.length(1) - columns.begin,
                 range_result->data),
-            stride);
+            stride));
+    }
+
+
+    virtual std::unique_ptr<Dense> create_submatrix_impl(
+        const span& rows, const span& columns, const size_type stride) const
+    {
+        const_row_major_range range_this{
+            this->get_const_values(), this->get_size()[0], this->get_size()[1],
+            this->get_stride()};
+        const auto range_result = range_this(rows, columns);
+        // TODO: can result in HUGE padding - which will be copied with the
+        // vector
+        return std::move(Dense::create(
+            this->get_executor(),
+            dim<2>{range_result.length(0), range_result.length(1)},
+            Array<ValueType>::view(
+                this->get_executor(),
+                range_result.length(0) * range_this.length(1) - columns.begin,
+                const_cast<ValueType*>(range_result->data)),
+            stride));
     }
 
     void apply_impl(const LinOp* b, LinOp* x) const override;
@@ -1093,7 +1119,7 @@ struct temporary_clone_helper<matrix::Dense<ValueType>> {
 template <typename Matrix, typename... TArgs>
 std::unique_ptr<Matrix> initialize(
     size_type stride, std::initializer_list<typename Matrix::value_type> vals,
-    std::shared_ptr<const Executor> exec, TArgs &&... create_args)
+    std::shared_ptr<const Executor> exec, TArgs&&... create_args)
 {
     using dense = matrix::Dense<typename Matrix::value_type>;
     size_type num_rows = vals.size();
@@ -1132,7 +1158,7 @@ std::unique_ptr<Matrix> initialize(
 template <typename Matrix, typename... TArgs>
 std::unique_ptr<Matrix> initialize(
     std::initializer_list<typename Matrix::value_type> vals,
-    std::shared_ptr<const Executor> exec, TArgs &&... create_args)
+    std::shared_ptr<const Executor> exec, TArgs&&... create_args)
 {
     return initialize<Matrix>(1, vals, std::move(exec),
                               std::forward<TArgs>(create_args)...);
@@ -1165,7 +1191,7 @@ std::unique_ptr<Matrix> initialize(
     size_type stride,
     std::initializer_list<std::initializer_list<typename Matrix::value_type>>
         vals,
-    std::shared_ptr<const Executor> exec, TArgs &&... create_args)
+    std::shared_ptr<const Executor> exec, TArgs&&... create_args)
 {
     using dense = matrix::Dense<typename Matrix::value_type>;
     size_type num_rows = vals.size();
@@ -1213,7 +1239,7 @@ template <typename Matrix, typename... TArgs>
 std::unique_ptr<Matrix> initialize(
     std::initializer_list<std::initializer_list<typename Matrix::value_type>>
         vals,
-    std::shared_ptr<const Executor> exec, TArgs &&... create_args)
+    std::shared_ptr<const Executor> exec, TArgs&&... create_args)
 {
     return initialize<Matrix>(vals.size() > 0 ? begin(vals)->size() : 0, vals,
                               std::move(exec),
