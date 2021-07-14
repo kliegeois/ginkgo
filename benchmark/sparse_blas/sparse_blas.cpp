@@ -120,7 +120,7 @@ std::pair<bool, double> validate_result(const Mtx *correct_mtx,
         }
         for (auto nz = begin; nz < end; nz++) {
             const auto diff = host_mtx->get_const_values()[nz] -
-                              host_mtx->get_const_values()[nz];
+                              correct_mtx->get_const_values()[nz];
             err_nrm_sq += gko::squared_norm(diff);
         }
     }
@@ -142,7 +142,7 @@ public:
 
 class SpgemmOperation : public BenchmarkOperation {
 public:
-    SpgemmOperation(const Mtx *mtx) : mtx_{mtx}
+    explicit SpgemmOperation(const Mtx *mtx) : mtx_{mtx}
     {
         auto exec = mtx_->get_executor();
         const auto size = mtx_->get_size();
@@ -253,7 +253,7 @@ private:
 
 class SpgeamOperation : public BenchmarkOperation {
 public:
-    SpgeamOperation(const Mtx *mtx) : mtx_{mtx}
+    explicit SpgeamOperation(const Mtx *mtx) : mtx_{mtx}
     {
         auto exec = mtx_->get_executor();
         const auto size = mtx_->get_size();
@@ -301,7 +301,7 @@ public:
                (sizeof(etype) + sizeof(itype));
     }
 
-    void prepare() { mtx_out_ = mtx2_->clone(); }
+    void prepare() override { mtx_out_ = mtx2_->clone(); }
 
     void run() override
     {
@@ -319,7 +319,7 @@ private:
 
 class TransposeOperation : public BenchmarkOperation {
 public:
-    TransposeOperation(const Mtx *mtx) : mtx_{mtx} {}
+    explicit TransposeOperation(const Mtx *mtx) : mtx_{mtx} {}
 
     std::pair<bool, double> validate() const override
     {
@@ -338,7 +338,7 @@ public:
                (sizeof(etype) + sizeof(itype));
     }
 
-    void prepare() { mtx_out_ = nullptr; }
+    void prepare() override { mtx_out_ = nullptr; }
 
     void run() override { mtx_out_ = gko::as<Mtx>(mtx_->transpose()); }
 
@@ -348,8 +348,8 @@ private:
 };
 
 
-std::map<std::string,
-         std::function<std::unique_ptr<BenchmarkOperation>(const Mtx *)>>
+const std::map<std::string,
+               std::function<std::unique_ptr<BenchmarkOperation>(const Mtx *)>>
     operation_map{
         {"spgemm",
          [](const Mtx *mtx) { return std::make_unique<SpgemmOperation>(mtx); }},
@@ -436,7 +436,6 @@ int main(int argc, char *argv[])
     initialize_argument_parsing(&argc, &argv, header, format);
 
     auto exec = executor_factory.at(FLAGS_executor)();
-    auto engine = get_engine();
 
     rapidjson::IStreamWrapper jcin(std::cin);
     rapidjson::Document test_cases;
@@ -445,7 +444,8 @@ int main(int argc, char *argv[])
         print_config_error_and_exit();
     }
 
-    print_general_information("");
+    std::string extra_information = "The operations are " + FLAGS_operations;
+    print_general_information(extra_information);
 
     auto &allocator = test_cases.GetAllocator();
 
