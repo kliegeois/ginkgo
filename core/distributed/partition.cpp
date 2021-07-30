@@ -30,7 +30,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ******************************<GINKGO LICENSE>*******************************/
 
+#include <ginkgo/core/base/mpi.hpp>
 #include <ginkgo/core/distributed/partition.hpp>
+#include <numeric>
 
 
 #include "core/distributed/partition_kernels.hpp"
@@ -81,6 +83,35 @@ Partition<LocalIndexType>::build_from_contiguous(
                                                     result.get()));
     result->compute_range_ranks();
     return result;
+}
+
+
+template <typename LocalIndexType>
+std::unique_ptr<Partition<LocalIndexType>>
+Partition<LocalIndexType>::build_from_local_size(
+    std::shared_ptr<const Executor> exec, local_index_type local_size,
+    std::shared_ptr<const mpi::communicator> comm)
+{
+    auto local_size_as_global = static_cast<global_index_type>(local_size);
+    // compute MPI prefix sum to get offset of local indices
+    global_index_type offset = 0;
+    mpi::scan(&local_size_as_global, &offset, 1, mpi::op_type::sum, comm);
+
+    // make all offsets available on each rank
+    Array<global_index_type> ranges(exec->get_master(), comm->size() + 1);
+    ranges.fill(0);
+
+    mpi::all_gather(&offset, 1, ranges.get_data(), 1, comm);
+
+    global_index_type global_size = 0;
+    mpi::all_reduce(&local_size_as_global, &global_size, 1, mpi::op_type::sum,
+                    comm);
+    ranges.get_data()[comm->size()] = global_size;
+
+    // move data to correct executor
+    ranges.set_executor(exec);
+
+    return Partition::build_from_contiguous(exec, ranges);
 }
 
 
