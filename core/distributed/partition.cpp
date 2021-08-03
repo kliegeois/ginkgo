@@ -88,25 +88,29 @@ Partition<LocalIndexType>::build_from_contiguous(
 
 template <typename LocalIndexType>
 std::unique_ptr<Partition<LocalIndexType>>
-Partition<LocalIndexType>::build_from_local_size(
-    std::shared_ptr<const Executor> exec, local_index_type local_size,
-    std::shared_ptr<const mpi::communicator> comm)
+Partition<LocalIndexType>::build_from_local_range(
+    std::shared_ptr<const Executor> exec, local_index_type local_start,
+    local_index_type local_end, std::shared_ptr<const mpi::communicator> comm)
 {
-    auto local_size_as_global = static_cast<global_index_type>(local_size);
-    // compute MPI prefix sum to get offset of local indices
-    global_index_type offset = 0;
-    mpi::scan(&local_size_as_global, &offset, 1, mpi::op_type::sum, comm);
+    global_index_type range[2] = {static_cast<global_index_type>(local_start),
+                                  static_cast<global_index_type>(local_end)};
 
-    // make all offsets available on each rank
+    // make all range_ends available on each rank
+    Array<global_index_type> ranges_start_end(exec->get_master(),
+                                              comm->size() * 2);
+    ranges_start_end.fill(0);
+    mpi::all_gather(range, 2, ranges_start_end.get_data(), 2, comm);
+
+    // remove duplicates
     Array<global_index_type> ranges(exec->get_master(), comm->size() + 1);
-    ranges.fill(0);
-
-    mpi::all_gather(&offset, 1, ranges.get_data(), 1, comm);
-
-    global_index_type global_size = 0;
-    mpi::all_reduce(&local_size_as_global, &global_size, 1, mpi::op_type::sum,
-                    comm);
-    ranges.get_data()[comm->size()] = global_size;
+    auto ranges_se_data = ranges_start_end.get_const_data();
+    ranges.get_data()[0] = ranges_se_data[0];
+    for (int i = 1; i < ranges_start_end.get_num_elems() - 1; i += 2) {
+        GKO_ASSERT_EQ(ranges_se_data[i], ranges_se_data[i + 1]);
+        ranges.get_data()[i / 2 + 1] = ranges_se_data[i];
+    }
+    ranges.get_data()[ranges.get_num_elems() - 1] =
+        ranges_se_data[ranges_start_end.get_num_elems() - 1];
 
     // move data to correct executor
     ranges.set_executor(exec);

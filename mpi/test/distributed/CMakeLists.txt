@@ -1,0 +1,1 @@
+ginkgo_create_mpi_test(partition_kernels 4)
