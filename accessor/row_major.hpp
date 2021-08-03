@@ -35,6 +35,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <array>
 
+
 #include "accessor_helper.hpp"
 #include "range.hpp"
 #include "utils.hpp"
@@ -141,7 +142,7 @@ public:
     template <typename... Indices>
     constexpr GKO_ACC_ATTRIBUTES
         std::enable_if_t<are_all_integral<Indices...>::value, value_type &>
-        operator()(Indices &&... indices) const
+        operator()(Indices &&...indices) const
     {
         return data[helper::compute_row_major_index(
             lengths, stride, std::forward<Indices>(indices)...)];

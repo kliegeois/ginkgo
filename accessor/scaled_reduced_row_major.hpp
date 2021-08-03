@@ -85,7 +85,7 @@ struct enable_write_scalar<Dimensionality, Accessor, ScalarType, false> {
      */
     template <typename... Indices>
     constexpr GKO_ACC_ATTRIBUTES scalar_type
-    write_scalar_masked(scalar_type value, Indices &&... indices) const
+    write_scalar_masked(scalar_type value, Indices &&...indices) const
     {
         static_assert(sizeof...(Indices) == Dimensionality,
                       "Number of indices must match dimensionality!");
@@ -107,7 +107,7 @@ struct enable_write_scalar<Dimensionality, Accessor, ScalarType, false> {
      */
     template <typename... Indices>
     constexpr GKO_ACC_ATTRIBUTES scalar_type
-    write_scalar_direct(scalar_type value, Indices &&... indices) const
+    write_scalar_direct(scalar_type value, Indices &&...indices) const
     {
         scalar_type *GKO_ACC_RESTRICT rest_scalar = self()->scalar_;
         return rest_scalar[self()->compute_direct_scalar_index(
@@ -295,7 +295,7 @@ public:
      */
     template <typename... Indices>
     constexpr GKO_ACC_ATTRIBUTES scalar_type
-    read_scalar_masked(Indices &&... indices) const
+    read_scalar_masked(Indices &&...indices) const
     {
         const arithmetic_type *GKO_ACC_RESTRICT rest_scalar = scalar_;
         return rest_scalar[compute_mask_scalar_index(
@@ -313,7 +313,7 @@ public:
      */
     template <typename... Indices>
     constexpr GKO_ACC_ATTRIBUTES scalar_type
-    read_scalar_direct(Indices &&... indices) const
+    read_scalar_direct(Indices &&...indices) const
     {
         const arithmetic_type *GKO_ACC_RESTRICT rest_scalar = scalar_;
         return rest_scalar[compute_direct_scalar_index(
@@ -449,7 +449,7 @@ public:
 protected:
     template <typename... Indices>
     constexpr GKO_ACC_ATTRIBUTES size_type
-    compute_index(Indices &&... indices) const
+    compute_index(Indices &&...indices) const
     {
         static_assert(sizeof...(Indices) == dimensionality,
                       "Number of indices must match dimensionality!");
@@ -459,7 +459,7 @@ protected:
 
     template <typename... Indices>
     constexpr GKO_ACC_ATTRIBUTES size_type
-    compute_mask_scalar_index(Indices &&... indices) const
+    compute_mask_scalar_index(Indices &&...indices) const
     {
         static_assert(sizeof...(Indices) == dimensionality,
                       "Number of indices must match dimensionality!");
@@ -470,7 +470,7 @@ protected:
 
     template <typename... Indices>
     constexpr GKO_ACC_ATTRIBUTES size_type
-    compute_direct_scalar_index(Indices &&... indices) const
+    compute_direct_scalar_index(Indices &&...indices) const
     {
         static_assert(
             sizeof...(Indices) == scalar_dim,
