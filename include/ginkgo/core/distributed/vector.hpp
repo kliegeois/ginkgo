@@ -56,7 +56,8 @@ class Vector
       public EnableCreateMethod<Vector<ValueType>>,
       public ConvertibleTo<Vector<next_precision<ValueType>>>,
       public EnableAbsoluteComputation<remove_complex<Vector<ValueType>>>,
-      public DistributedBase {
+      public DistributedBase,
+      public ScalarProductComputable {
     friend class EnableCreateMethod<Vector<ValueType>>;
     friend class EnablePolymorphicObject<Vector, LinOp>;
     friend class Vector<to_complex<ValueType>>;
@@ -72,9 +73,9 @@ public:
     using complex_type = to_complex<Vector>;
     using local_mtx_type = matrix::Dense<value_type>;
 
-    void convert_to(Vector<next_precision<ValueType>> *result) const override;
+    void convert_to(Vector<next_precision<ValueType>>* result) const override;
 
-    void move_to(Vector<next_precision<ValueType>> *result) override;
+    void move_to(Vector<next_precision<ValueType>>* result) override;
 
     /**
      * Fill the distributed vector with a given value.
@@ -83,10 +84,10 @@ public:
      */
     void fill(const ValueType value);
 
-    void read_distributed(const matrix_data<ValueType, global_index_type> &data,
+    void read_distributed(const matrix_data<ValueType, global_index_type>& data,
                           std::shared_ptr<const Partition<int64>> partition);
 
-    void read_distributed(const matrix_data<ValueType, global_index_type> &data,
+    void read_distributed(const matrix_data<ValueType, global_index_type>& data,
                           std::shared_ptr<const Partition<int32>> partition);
 
     std::unique_ptr<absolute_type> compute_absolute() const override;
@@ -102,7 +103,7 @@ public:
      *               element of alpha (the number of columns of alpha has to
      *               match the number of columns of the matrix).
      */
-    void scale(const LinOp *alpha);
+    void scale(const LinOp* alpha);
 
     /**
      * Adds `b` scaled by `alpha` to the matrix (aka: BLAS axpy).
@@ -114,7 +115,7 @@ public:
      *               match the number of columns of the matrix).
      * @param b  a matrix of the same dimension as this
      */
-    void add_scaled(const LinOp *alpha, const LinOp *b);
+    void add_scaled(const LinOp* alpha, const LinOp* b);
 
     /**
      * Computes the column-wise dot product of this matrix and `b`.
@@ -124,7 +125,7 @@ public:
      *                (the number of column in the vector must match the number
      *                of columns of this)
      */
-    void compute_dot(const LinOp *b, LinOp *result) const;
+    void compute_dot(const LinOp* b, LinOp* result) const override;
 
     /**
      * Computes the column-wise dot product of this matrix and `conj(b)`.
@@ -134,7 +135,7 @@ public:
      *                (the number of column in the vector must match the number
      *                of columns of this)
      */
-    void compute_conj_dot(const LinOp *b, LinOp *result) const;
+    void compute_conj_dot(const LinOp* b, LinOp* result) const override;
 
     /**
      * Computes the Euclidian (L^2) norm of this matrix.
@@ -143,12 +144,12 @@ public:
      *                (the number of columns in the vector must match the number
      *                of columns of this)
      */
-    void compute_norm2(LinOp *result) const;
+    void compute_norm2(LinOp* result) const override;
 
-    const local_mtx_type *get_local() const;
+    const local_mtx_type* get_local() const;
 
     // Promise not to break things? :)
-    local_mtx_type *get_local();
+    local_mtx_type* get_local();
 
     void validate_data() const override;
 
@@ -162,10 +163,10 @@ protected:
                std::make_shared<mpi::communicator>(),
            dim<2> global_size = {}, dim<2> local_size = {});
 
-    void apply_impl(const LinOp *, LinOp *) const override;
+    void apply_impl(const LinOp*, LinOp*) const override;
 
-    void apply_impl(const LinOp *, const LinOp *, const LinOp *,
-                    LinOp *) const override;
+    void apply_impl(const LinOp*, const LinOp*, const LinOp*,
+                    LinOp*) const override;
 
 private:
     // std::shared_ptr<mpi::communicator> comm_;

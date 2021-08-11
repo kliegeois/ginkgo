@@ -126,7 +126,8 @@ class Dense
       public Transposable,
       public Permutable<int32>,
       public Permutable<int64>,
-      public EnableAbsoluteComputation<remove_complex<Dense<ValueType>>> {
+      public EnableAbsoluteComputation<remove_complex<Dense<ValueType>>>,
+      public ScalarProductComputable {
     friend class EnableCreateMethod<Dense>;
     friend class EnablePolymorphicObject<Dense, LinOp>;
     friend class Coo<ValueType, int32>;
@@ -703,7 +704,7 @@ public:
      *                (the number of column in the vector must match the number
      *                of columns of this)
      */
-    void compute_dot(const LinOp* b, LinOp* result) const
+    void compute_dot(const LinOp* b, LinOp* result) const override
     {
         auto exec = this->get_executor();
         this->compute_dot_impl(make_temporary_clone(exec, b).get(),
@@ -718,7 +719,7 @@ public:
      *                (the number of column in the vector must match the number
      *                of columns of this)
      */
-    void compute_conj_dot(const LinOp* b, LinOp* result) const
+    void compute_conj_dot(const LinOp* b, LinOp* result) const override
     {
         auto exec = this->get_executor();
         this->compute_conj_dot_impl(
@@ -733,7 +734,7 @@ public:
      *                (the number of columns in the vector must match the number
      *                of columns of this)
      */
-    void compute_norm2(LinOp* result) const
+    void compute_norm2(LinOp* result) const override
     {
         auto exec = this->get_executor();
         this->compute_norm2_impl(
@@ -1086,7 +1087,7 @@ struct temporary_clone_helper<matrix::Dense<ValueType>> {
 template <typename Matrix, typename... TArgs>
 std::unique_ptr<Matrix> initialize(
     size_type stride, std::initializer_list<typename Matrix::value_type> vals,
-    std::shared_ptr<const Executor> exec, TArgs &&... create_args)
+    std::shared_ptr<const Executor> exec, TArgs&&... create_args)
 {
     using dense = matrix::Dense<typename Matrix::value_type>;
     size_type num_rows = vals.size();
@@ -1125,7 +1126,7 @@ std::unique_ptr<Matrix> initialize(
 template <typename Matrix, typename... TArgs>
 std::unique_ptr<Matrix> initialize(
     std::initializer_list<typename Matrix::value_type> vals,
-    std::shared_ptr<const Executor> exec, TArgs &&... create_args)
+    std::shared_ptr<const Executor> exec, TArgs&&... create_args)
 {
     return initialize<Matrix>(1, vals, std::move(exec),
                               std::forward<TArgs>(create_args)...);
@@ -1158,7 +1159,7 @@ std::unique_ptr<Matrix> initialize(
     size_type stride,
     std::initializer_list<std::initializer_list<typename Matrix::value_type>>
         vals,
-    std::shared_ptr<const Executor> exec, TArgs &&... create_args)
+    std::shared_ptr<const Executor> exec, TArgs&&... create_args)
 {
     using dense = matrix::Dense<typename Matrix::value_type>;
     size_type num_rows = vals.size();
@@ -1206,7 +1207,7 @@ template <typename Matrix, typename... TArgs>
 std::unique_ptr<Matrix> initialize(
     std::initializer_list<std::initializer_list<typename Matrix::value_type>>
         vals,
-    std::shared_ptr<const Executor> exec, TArgs &&... create_args)
+    std::shared_ptr<const Executor> exec, TArgs&&... create_args)
 {
     return initialize<Matrix>(vals.size() > 0 ? begin(vals)->size() : 0, vals,
                               std::move(exec),
