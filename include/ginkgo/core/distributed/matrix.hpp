@@ -57,6 +57,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace gko {
 namespace distributed {
 
+enum class data_placement { local, global };
+
 template <typename ValueType = double, typename LocalIndexType = int32>
 class Matrix : public EnableLinOp<Matrix<ValueType, LocalIndexType>>,
                public EnableCreateMethod<Matrix<ValueType, LocalIndexType>>,
@@ -69,22 +71,40 @@ public:
     using index_type = global_index_type;
     using local_index_type = LocalIndexType;
 
-    void read_distributed(
-        const matrix_data<ValueType, global_index_type> &data,
-        std::shared_ptr<const Partition<local_index_type>> partition);
-
-    void read_distributed(
-        const Array<matrix_data_entry<ValueType, global_index_type>> &data,
-        dim<2> size,
-        std::shared_ptr<const Partition<local_index_type>> partition);
-
-    void validate_data() const override;
-
-protected:
     using GlobalVec = Vector<value_type>;
     using LocalVec = matrix::Dense<value_type>;
     using LocalMtx = matrix::Csr<value_type, local_index_type>;
 
+    /**
+     *
+     * @param data  matrix_data of the global matrix, needs to have global size
+     * @param partition
+     */
+    void read_distributed(
+        const matrix_data<ValueType, global_index_type> &data,
+        std::shared_ptr<const Partition<local_index_type>> partition,
+        data_placement placement = data_placement::global);
+
+    void read_distributed(
+        const Array<matrix_data_entry<ValueType, global_index_type>> &data,
+        dim<2> size,
+        std::shared_ptr<const Partition<local_index_type>> partition,
+        data_placement placement = data_placement::global);
+
+    void validate_data() const override;
+
+    LocalMtx *get_local_diag() { return &diag_mtx_; }
+    LocalMtx *get_local_offdiag() { return &offdiag_mtx_; }
+    const LocalMtx *get_local_diag() const { return &diag_mtx_; }
+    const LocalMtx *get_local_offdiag() const { return &offdiag_mtx_; }
+
+
+    const Partition<local_index_type> *get_partition() const
+    {
+        return partition_.get();
+    }
+
+protected:
     Matrix(std::shared_ptr<const Executor> exec,
            std::shared_ptr<mpi::communicator> comm =
                std::make_shared<mpi::communicator>());
@@ -109,6 +129,7 @@ private:
     mutable DenseCache<value_type> recv_buffer_;
     LocalMtx diag_mtx_;
     LocalMtx offdiag_mtx_;
+    std::shared_ptr<const Partition<local_index_type>> partition_;
 };
 
 
