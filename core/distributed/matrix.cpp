@@ -89,6 +89,7 @@ void Matrix<ValueType, LocalIndexType>::read_distributed(
     dim<2> size, std::shared_ptr<const Partition<LocalIndexType>> partition,
     data_placement placement)
 {
+    this->partition_ = partition;
     const auto comm = this->get_communicator();
     GKO_ASSERT_IS_SQUARE_MATRIX(size);
     GKO_ASSERT_EQ(size[0], partition->get_size());
