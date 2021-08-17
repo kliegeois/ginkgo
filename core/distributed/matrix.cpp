@@ -35,6 +35,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <ginkgo/core/distributed/vector.hpp>
 
+#include <ginkgo/core/matrix/csr.hpp>
+
 
 #include "core/distributed/matrix_kernels.hpp"
 
@@ -44,7 +46,11 @@ namespace distributed {
 namespace matrix {
 GKO_REGISTER_OPERATION(build_diag_offdiag,
                        distributed_matrix::build_diag_offdiag);
-}
+GKO_REGISTER_OPERATION(merge_diag_offdiag,
+                       distributed_matrix::merge_diag_offdiag);
+GKO_REGISTER_OPERATION(combine_local_mtxs,
+                       distributed_matrix::combine_local_mtxs);
+}  // namespace matrix
 
 
 template <typename ValueType, typename LocalIndexType>
@@ -284,6 +290,29 @@ void Matrix<ValueType, LocalIndexType>::validate_data() const
             host_gather_idx_ptr, host_gather_idx_ptr + num_gather_rows,
             [&](auto row) { return row >= 0 && row < num_local_rows; }));
 }
+
+
+template <typename ValueType, typename LocalIndexType>
+void Matrix<ValueType, LocalIndexType>::convert_to(
+    gko::matrix::Csr<ValueType, LocalIndexType> *result) const
+{
+    // already have total size
+    // compute total nonzero number
+    auto exec = this->get_executor();
+
+    dim<2> local_size{diag_mtx_.get_size()[0], this->get_size()[1]};
+    // merge diag and off diag
+    auto tmp =
+        gko::matrix::Csr<ValueType, LocalIndexType>::create(exec, local_size);
+    exec->run(matrix::make_merge_diag_offdiag(
+        this->get_local_diag(), this->get_local_offdiag(), tmp.get()));
+
+    // copy all merged data to result
+    exec->run(matrix::make_combine_local_mtxs(tmp.get(), result));
+}
+template <typename ValueType, typename LocalIndexType>
+void Matrix<ValueType, LocalIndexType>::move_to(
+    gko::matrix::Csr<ValueType, LocalIndexType> *result) GKO_NOT_IMPLEMENTED;
 
 
 #define GKO_DECLARE_DISTRIBUTED_MATRIX(ValueType, LocalIndexType) \

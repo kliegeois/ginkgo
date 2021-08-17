@@ -60,9 +60,13 @@ namespace distributed {
 enum class data_placement { local, global };
 
 template <typename ValueType = double, typename LocalIndexType = int32>
-class Matrix : public EnableLinOp<Matrix<ValueType, LocalIndexType>>,
-               public EnableCreateMethod<Matrix<ValueType, LocalIndexType>>,
-               public DistributedBase {
+class Matrix
+    : public EnableLinOp<Matrix<ValueType, LocalIndexType>>,
+      public EnableCreateMethod<Matrix<ValueType, LocalIndexType>>,
+      public ConvertibleTo<
+          matrix::Csr<ValueType, LocalIndexType>>,  // Todo: shouldn't it be
+                                                    // global_index_type?
+      public DistributedBase {
     friend class EnableCreateMethod<Matrix>;
     friend class EnablePolymorphicObject<Matrix, LinOp>;
 
@@ -93,11 +97,18 @@ public:
 
     void validate_data() const override;
 
-    LocalMtx *get_local_diag() { return &diag_mtx_; }
-    LocalMtx *get_local_offdiag() { return &offdiag_mtx_; }
-    const LocalMtx *get_local_diag() const { return &diag_mtx_; }
-    const LocalMtx *get_local_offdiag() const { return &offdiag_mtx_; }
+    void convert_to(
+        matrix::Csr<ValueType, LocalIndexType> *result) const override;
 
+    void move_to(matrix::Csr<ValueType, LocalIndexType> *result) override;
+
+    LocalMtx *get_local_diag() { return &diag_mtx_; }
+
+    LocalMtx *get_local_offdiag() { return &offdiag_mtx_; }
+
+    const LocalMtx *get_local_diag() const { return &diag_mtx_; }
+
+    const LocalMtx *get_local_offdiag() const { return &offdiag_mtx_; }
 
     const Partition<local_index_type> *get_partition() const
     {
