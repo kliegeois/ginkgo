@@ -178,7 +178,6 @@ set(GINKGO_HIP_SOURCES
     preconditioner/jacobi_kernels.hip.cpp
     preconditioner/jacobi_simple_apply_kernel.hip.cpp
     reorder/rcm_kernels.hip.cpp
-    solver/gmres_kernels.hip.cpp
     solver/cb_gmres_kernels.hip.cpp
     solver/idr_kernels.hip.cpp
     solver/lower_trs_kernels.hip.cpp
@@ -196,6 +195,7 @@ set(GINKGO_HIP_SOURCES
     ../common/unified/solver/cg_kernels.cpp
     ../common/unified/solver/cgs_kernels.cpp
     ../common/unified/solver/fcg_kernels.cpp
+    ../common/unified/solver/gmres_kernels.cpp
     ../common/unified/solver/ir_kernels.cpp
     )
 

@@ -77,6 +77,7 @@ set(GKO_CUDA_COMMON_SOURCES
     ../common/unified/solver/cg_kernels.cpp
     ../common/unified/solver/cgs_kernels.cpp
     ../common/unified/solver/fcg_kernels.cpp
+    ../common/unified/solver/gmres_kernels.cpp
     ../common/unified/solver/ir_kernels.cpp
     )
 target_sources(ginkgo_cuda
@@ -115,7 +116,6 @@ target_sources(ginkgo_cuda
     preconditioner/jacobi_kernels.cu
     preconditioner/jacobi_simple_apply_kernel.cu
     reorder/rcm_kernels.cu
-    solver/gmres_kernels.cu
     solver/cb_gmres_kernels.cu
     solver/idr_kernels.cu
     solver/lower_trs_kernels.cu

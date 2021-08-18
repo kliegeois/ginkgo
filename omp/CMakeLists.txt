@@ -27,7 +27,6 @@ target_sources(ginkgo_omp
     preconditioner/isai_kernels.cpp
     preconditioner/jacobi_kernels.cpp
     reorder/rcm_kernels.cpp
-    solver/gmres_kernels.cpp
     solver/cb_gmres_kernels.cpp
     solver/idr_kernels.cpp
     solver/lower_trs_kernels.cpp
@@ -45,6 +44,7 @@ target_sources(ginkgo_omp
     ../common/unified/solver/cg_kernels.cpp
     ../common/unified/solver/cgs_kernels.cpp
     ../common/unified/solver/fcg_kernels.cpp
+    ../common/unified/solver/gmres_kernels.cpp
     ../common/unified/solver/ir_kernels.cpp
     )
 

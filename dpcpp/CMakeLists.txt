@@ -40,7 +40,6 @@ target_sources(ginkgo_dpcpp
     preconditioner/isai_kernels.dp.cpp
     preconditioner/jacobi_kernels.dp.cpp
     reorder/rcm_kernels.dp.cpp
-    solver/gmres_kernels.dp.cpp
     solver/cb_gmres_kernels.dp.cpp
     solver/idr_kernels.dp.cpp
     solver/lower_trs_kernels.dp.cpp
@@ -58,6 +57,7 @@ target_sources(ginkgo_dpcpp
     ../common/unified/solver/cg_kernels.cpp
     ../common/unified/solver/cgs_kernels.cpp
     ../common/unified/solver/fcg_kernels.cpp
+    ../common/unified/solver/gmres_kernels.cpp
     ../common/unified/solver/ir_kernels.cpp
     )
 
