@@ -53,6 +53,8 @@ void build_diag_offdiag(
     Array<LocalIndexType> &local_gather_idxs, comm_index_type *recv_offsets,
     Array<global_index_type> &local_row_to_global,
     Array<global_index_type> &local_offdiag_col_to_global,
+    const Array<global_index_type> &local_to_global_row,
+    const Array<global_index_type> &local_to_global_offdiag_col,
     ValueType deduction_help) GKO_NOT_IMPLEMENTED;
 
 GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(GKO_DECLARE_BUILD_DIAG_OFFDIAG);
@@ -62,7 +64,7 @@ template <typename ValueType, typename LocalIndexType>
 void merge_diag_offdiag(std::shared_ptr<const DefaultExecutor> exec,
                         const matrix::Csr<ValueType, LocalIndexType> *diag,
                         const matrix::Csr<ValueType, LocalIndexType> *offdiag,
-                        matrix::Csr<ValueType, LocalIndexType> *result)
+                        matrix::Csr<ValueType, global_index_type> *result)
     GKO_NOT_IMPLEMENTED;
 
 GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(GKO_DECLARE_MERGE_DIAG_OFFDIAG);

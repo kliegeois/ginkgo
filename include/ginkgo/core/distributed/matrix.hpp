@@ -60,13 +60,10 @@ namespace distributed {
 enum class data_placement { local, global };
 
 template <typename ValueType = double, typename LocalIndexType = int32>
-class Matrix
-    : public EnableLinOp<Matrix<ValueType, LocalIndexType>>,
-      public EnableCreateMethod<Matrix<ValueType, LocalIndexType>>,
-      public ConvertibleTo<
-          matrix::Csr<ValueType, LocalIndexType>>,  // Todo: shouldn't it be
-                                                    // global_index_type?
-      public DistributedBase {
+class Matrix : public EnableLinOp<Matrix<ValueType, LocalIndexType>>,
+               public EnableCreateMethod<Matrix<ValueType, LocalIndexType>>,
+               public ConvertibleTo<matrix::Csr<ValueType, global_index_type>>,
+               public DistributedBase {
     friend class EnableCreateMethod<Matrix>;
     friend class EnablePolymorphicObject<Matrix, LinOp>;
 
@@ -98,9 +95,9 @@ public:
     void validate_data() const override;
 
     void convert_to(
-        matrix::Csr<ValueType, LocalIndexType> *result) const override;
+        matrix::Csr<ValueType, global_index_type> *result) const override;
 
-    void move_to(matrix::Csr<ValueType, LocalIndexType> *result) override;
+    void move_to(matrix::Csr<ValueType, global_index_type> *result) override;
 
     LocalMtx *get_local_diag() { return &diag_mtx_; }
 
