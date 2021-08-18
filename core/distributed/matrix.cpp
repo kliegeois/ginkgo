@@ -64,6 +64,8 @@ Matrix<ValueType, LocalIndexType>::Matrix(
       recv_offsets_(comm->size() + 1),
       recv_sizes_(comm->size()),
       gather_idxs_{exec},
+      local_to_global_row{exec},
+      local_to_global_offdiag_col{exec},
       one_scalar_{exec, dim<2>{1, 1}},
       diag_mtx_{exec},
       offdiag_mtx_{exec}
@@ -123,7 +125,8 @@ void Matrix<ValueType, LocalIndexType>::read_distributed(
     // build diagonal, off-diagonal matrix and communication structures
     exec->run(matrix::make_build_diag_offdiag(
         *local_data, partition.get(), local_part, diag_data, offdiag_data,
-        recv_gather_idxs, recv_offsets_array.get_data(), ValueType{}));
+        recv_gather_idxs, recv_offsets_array.get_data(), local_to_global_row,
+        local_to_global_offdiag_col, ValueType{}));
 
     dim<2> offdiag_dim{local_size, recv_gather_idxs.get_num_elems()};
     this->diag_mtx_.read(diag_data, diag_dim);
@@ -300,12 +303,19 @@ void Matrix<ValueType, LocalIndexType>::convert_to(
     // compute total nonzero number
     auto exec = this->get_executor();
 
-    dim<2> local_size{diag_mtx_.get_size()[0], this->get_size()[1]};
+    dim<2> local_size{this->get_local_diag()->get_size()[0],
+                      this->get_size()[1]};
+    auto local_nnz = this->get_local_diag()->get_num_stored_elements() +
+                     this->get_local_offdiag()->get_num_stored_elements();
     // merge diag and off diag
-    auto tmp =
-        gko::matrix::Csr<ValueType, LocalIndexType>::create(exec, local_size);
+    auto tmp = gko::matrix::Csr<ValueType, LocalIndexType>::create(
+        exec, local_size, local_nnz);
     exec->run(matrix::make_merge_diag_offdiag(
         this->get_local_diag(), this->get_local_offdiag(), tmp.get()));
+
+    auto global_nnz = local_nnz;
+    mpi::all_reduce(&global_nnz, 1, mpi::op_type::sum,
+                    this->get_communicator());
 
     // copy all merged data to result
     exec->run(matrix::make_combine_local_mtxs(tmp.get(), result));
