@@ -339,8 +339,18 @@ void Matrix<ValueType, LocalIndexType>::convert_to(
     auto mapped_offdiag =
         promote_index_type(this->get_local_offdiag(), local_size);
     auto tmp = GMtx::create(exec, local_size, local_nnz);
-    exec->run(matrix::make_merge_diag_offdiag(
-        this->get_local_diag(), this->get_local_offdiag(), tmp.get()));
+
+    exec->run(matrix::make_map_to_global_idxs(
+        this->get_local_diag()->get_const_col_idxs(), diag_nnz,
+        mapped_diag->get_col_idxs(),
+        this->local_to_global_row.get_const_data()));
+    exec->run(matrix::make_map_to_global_idxs(
+        this->get_local_offdiag()->get_const_col_idxs(), offdiag_nnz,
+        mapped_offdiag->get_col_idxs(),
+        this->local_to_global_offdiag_col.get_const_data()));
+    mapped_diag->sort_by_column_index();
+    mapped_offdiag->sort_by_column_index();
+
 
     auto global_nnz = local_nnz;
     mpi::all_reduce(&global_nnz, 1, mpi::op_type::sum,

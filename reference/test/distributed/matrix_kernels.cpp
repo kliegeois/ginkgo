@@ -423,6 +423,21 @@ TYPED_TEST(Matrix, BuildColMapScattered)
     }
 }
 
+TYPED_TEST(Matrix, MapToGlobalIdxs)
+{
+    using local_index_type = typename TestFixture::local_index_type;
+    gko::Array<local_index_type> source{this->ref, {0, 1, 2, 3, 2, 2, 0}};
+    gko::Array<global_index_type> result{this->ref, {0, 10, 3, 8, 3, 3, 0}};
+    gko::Array<global_index_type> target{this->ref, source.get_num_elems()};
+    gko::Array<global_index_type> map{this->ref, {0, 10, 3, 8}};
+
+    gko::kernels::reference::distributed_matrix::map_to_global_idxs(
+        this->ref, source.get_const_data(), source.get_num_elems(),
+        target.get_data(), map.get_const_data());
+
+    GKO_ASSERT_ARRAY_EQ(result, target);
+}
+
 TYPED_TEST(Matrix, MergeLocalMatricesOffdiagRight)
 {
     this->mat_diag->read({

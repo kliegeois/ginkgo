@@ -75,11 +75,18 @@ namespace kernels {
         const matrix::Csr<ValueType, LocalIndexType> *local,      \
         matrix::Csr<ValueType, LocalIndexType> *result)
 
+#define GKO_DECLARE_MAP_TO_GLOBAL_IDXS(SourceType, TargetType)           \
+    void map_to_global_idxs(std::shared_ptr<const DefaultExecutor> exec, \
+                            const SourceType *input, size_t n,           \
+                            TargetType *output, const TargetType *map)
+
 #define GKO_DECLARE_ALL_AS_TEMPLATES                           \
     using global_index_type = distributed::global_index_type;  \
     using comm_index_type = distributed::comm_index_type;      \
     template <typename ValueType, typename LocalIndexType>     \
     GKO_DECLARE_BUILD_DIAG_OFFDIAG(ValueType, LocalIndexType); \
+    template <typename SourceType, typename TargetType>        \
+    GKO_DECLARE_MAP_TO_GLOBAL_IDXS(SourceType, TargetType);    \
     template <typename ValueType>                              \
     GKO_DECLARE_MERGE_DIAG_OFFDIAG(ValueType);                 \
     template <typename ValueType, typename LocalIndexType>     \
