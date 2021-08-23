@@ -183,9 +183,9 @@ struct has_to_arithmetic_type : std::false_type {};
 template <typename Ref, typename ArType>
 struct has_to_arithmetic_type<
     Ref, ArType,
-    std::enable_if_t<std::is_same<
-        ArType, decltype(std::declval<Ref>().to_arithmetic_type())>::value>>
-    // xstd::void_t<decltype(std::declval<Ref>().operator ArType())>>
+    // std::enable_if_t<std::is_same<
+    //    ArType, decltype(std::declval<Ref>().to_arithmetic_type())>::value>>
+    xstd::void_t<decltype(std::declval<Ref>().operator ArType())>>
     : std::true_type {};
 
 
@@ -205,8 +205,8 @@ constexpr GKO_ACC_ATTRIBUTES
     std::enable_if_t<has_to_arithmetic_type<Ref, ArType>::value, ArType>
     to_arithmetic_type(const Ref &ref)
 {
-    // return ref.operator ArType();
-    return ref.to_arithmetic_type();
+    return ref.operator ArType();
+    // return ref.to_arithmetic_type();
 }
 
 template <typename ArType, typename Ref>

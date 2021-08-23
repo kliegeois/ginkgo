@@ -84,6 +84,7 @@ template <typename Reference, typename ArithmeticType>
 struct enable_reference_operators {
     using arithmetic_type = std::remove_cv_t<ArithmeticType>;
 
+private:
     constexpr GKO_ACC_ATTRIBUTES GKO_ACC_INLINE arithmetic_type
     to_arithmetic_type() const
     {
@@ -91,6 +92,7 @@ struct enable_reference_operators {
             ->Reference::operator arithmetic_type();
     }
 
+public:
 #define GKO_ACC_REFERENCE_BINARY_OPERATOR_OVERLOAD(_op)                 \
     friend GKO_ACC_ENABLE_REFERENCE_CONSTEXPR GKO_ACC_INLINE            \
         GKO_ACC_ATTRIBUTES arithmetic_type                              \
