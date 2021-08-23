@@ -53,8 +53,6 @@ void build_diag_offdiag(
     Array<LocalIndexType> &local_gather_idxs, comm_index_type *recv_offsets,
     Array<global_index_type> &local_row_to_global,
     Array<global_index_type> &local_offdiag_col_to_global,
-    const Array<global_index_type> &local_to_global_row,
-    const Array<global_index_type> &local_to_global_offdiag_col,
     ValueType deduction_help) GKO_NOT_IMPLEMENTED;
 
 GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(GKO_DECLARE_BUILD_DIAG_OFFDIAG);
