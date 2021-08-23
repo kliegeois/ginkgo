@@ -98,27 +98,9 @@ protected:
                      {4, 4, 10}}},
           x_input{gko::dim<2>{size[0], 1},
                   {{0, 0, 1}, {1, 0, 1}, {2, 0, 1}, {3, 0, 1}, {4, 0, 1}}},
-          dist_input_nonoverlapping{
-              {{size, {{0, 1, 1}, {0, 3, 2}, {1, 1, 3}, {1, 2, 4}}},
-               {size, {{2, 2, 5}, {2, 4, 6}, {3, 1, 7}, {3, 3, 8}}},
-               {size, {{4, 0, 9}, {4, 4, 10}}}}},
-          dist_input_overlapping{
-              {{size,
-                {{0, 1, 1},
-                 {0, 3, 2},
-                 {1, 1, 1.5},
-                 {1, 2, 2},
-                 {2, 2, 2.5},
-                 {3, 1, 3.5}}},
-               {size,
-                {{2, 2, 2.5},
-                 {2, 4, 3},
-                 {3, 1, 3.5},
-                 {3, 3, 8},
-                 {1, 1, 1.5},
-                 {1, 2, 2},
-                 {4, 0, 4.5}}},
-               {size, {{4, 0, 4.5}, {4, 4, 10}, {2, 4, 3}}}}},
+          dist_input{{{size, {{0, 1, 1}, {0, 3, 2}, {1, 1, 3}, {1, 2, 4}}},
+                      {size, {{2, 2, 5}, {2, 4, 6}, {3, 1, 7}, {3, 3, 8}}},
+                      {size, {{4, 0, 9}, {4, 4, 10}}}}},
           part{Partition::build_from_contiguous(
               ref, gko::Array<global_index_type>(ref, {0, 2, 4, 5}))},
           dist_x{Vec::create(ref)},
@@ -181,7 +163,7 @@ protected:
     gko::matrix_data<value_type, global_index_type> x_input;
     std::shared_ptr<Partition> part;
 
-    std::array<matrix_data, 3> dist_input_nonoverlapping;
+    std::array<matrix_data, 3> dist_input;
     std::array<matrix_data, 3> dist_input_overlapping;
 
     std::unique_ptr<Vec> dist_x;
@@ -213,7 +195,7 @@ TYPED_TEST(Matrix, ReadsDistributedGlobalData)
                                     this->part.get());
 }
 
-TYPED_TEST(Matrix, ReadsDistributedLocalNonoverlappingData)
+TYPED_TEST(Matrix, ReadsDistributedLocalData)
 {
     using value_type = typename TestFixture::value_type;
     auto dist_mat = TestFixture::Mtx::create(this->ref);
@@ -222,8 +204,7 @@ TYPED_TEST(Matrix, ReadsDistributedLocalNonoverlappingData)
     this->dist_y->fill(gko::zero<value_type>());
     auto p_id = dist_mat->get_communicator()->rank();
 
-    dist_mat->read_distributed(this->dist_input_nonoverlapping[p_id],
-                               this->part,
+    dist_mat->read_distributed(this->dist_input[p_id], this->part,
                                gko::distributed::data_placement::local);
     global_mat->read(this->mat_input);
     dist_mat->apply(this->dist_x.get(), this->dist_y.get());
@@ -235,28 +216,27 @@ TYPED_TEST(Matrix, ReadsDistributedLocalNonoverlappingData)
                                     this->part.get());
 }
 
-TYPED_TEST(Matrix, ReadsDistributedLocalOverlappingData)
+TYPED_TEST(Matrix, ConvertToCsr)
 {
     using value_type = typename TestFixture::value_type;
     auto dist_mat = TestFixture::Mtx::create(this->ref);
     auto global_mat = TestFixture::GMtx::create(this->ref);
+    auto converted = TestFixture::GMtx::create(this->ref);
     this->global_y->fill(gko::zero<value_type>());
     this->dist_y->fill(gko::zero<value_type>());
     auto p_id = dist_mat->get_communicator()->rank();
-
-    dist_mat->read_distributed(this->dist_input_overlapping[p_id], this->part,
+    dist_mat->read_distributed(this->mat_input, this->part,
                                gko::distributed::data_placement::local);
     global_mat->read(this->mat_input);
-    dist_mat->apply(this->dist_x.get(), this->dist_y.get());
-    global_mat->apply(this->global_x.get(), this->global_y.get());
 
-    //  not satisfied due to inconsistent handling of matrix_data with duplicate
-    //  indices this->compare_nnz_per_row(dist_mat.get(), global_mat.get(),
-    //                            this->part.get());
-    this->compare_local_with_global(this->dist_y.get(), this->global_y.get(),
-                                    this->part.get());
+    dist_mat->convert_to(converted.get());
+
+    if (dist_mat->get_communicator()->rank() == 0) {
+        GKO_ASSERT_MTX_NEAR(global_mat.get(), converted.get(), 0);
+    } else {
+        GKO_ASSERT(converted->get_num_stored_elements() == 0);
+    }
 }
-
 
 }  // namespace
 
