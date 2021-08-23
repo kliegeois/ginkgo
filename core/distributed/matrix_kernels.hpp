@@ -67,12 +67,6 @@ namespace kernels {
         const matrix::Csr<ValueType, global_index_type> *offdiag, \
         matrix::Csr<ValueType, global_index_type> *result)
 
-#define GKO_DECLARE_COMBINE_LOCAL_MTXS(ValueType, LocalIndexType) \
-    void combine_local_mtxs(                                      \
-        std::shared_ptr<const DefaultExecutor> exec,              \
-        const matrix::Csr<ValueType, LocalIndexType> *local,      \
-        matrix::Csr<ValueType, LocalIndexType> *result)
-
 #define GKO_DECLARE_MAP_TO_GLOBAL_IDXS(SourceType, TargetType)           \
     void map_to_global_idxs(std::shared_ptr<const DefaultExecutor> exec, \
                             const SourceType *input, size_t n,           \
@@ -86,9 +80,7 @@ namespace kernels {
     template <typename SourceType, typename TargetType>        \
     GKO_DECLARE_MAP_TO_GLOBAL_IDXS(SourceType, TargetType);    \
     template <typename ValueType>                              \
-    GKO_DECLARE_MERGE_DIAG_OFFDIAG(ValueType);                 \
-    template <typename ValueType, typename LocalIndexType>     \
-    GKO_DECLARE_COMBINE_LOCAL_MTXS(ValueType, LocalIndexType)
+    GKO_DECLARE_MERGE_DIAG_OFFDIAG(ValueType)
 
 namespace omp {
 namespace distributed_matrix {
