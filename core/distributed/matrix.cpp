@@ -50,6 +50,8 @@ GKO_REGISTER_OPERATION(merge_diag_offdiag,
                        distributed_matrix::merge_diag_offdiag);
 GKO_REGISTER_OPERATION(map_to_global_idxs,
                        distributed_matrix::map_to_global_idxs);
+GKO_REGISTER_OPERATION(build_gathered_row_permute,
+                       distributed_matrix::build_gathered_row_permute);
 }  // namespace matrix
 
 
