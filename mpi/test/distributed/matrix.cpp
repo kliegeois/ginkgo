@@ -30,6 +30,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ******************************<GINKGO LICENSE>*******************************/
 
+#include <ginkgo/core/base/exception.hpp>
 #include <ginkgo/core/base/matrix_data.hpp>
 #include <ginkgo/core/base/mpi.hpp>
 #include <ginkgo/core/distributed/matrix.hpp>
@@ -216,7 +217,7 @@ TYPED_TEST(Matrix, ReadsDistributedLocalData)
                                     this->part.get());
 }
 
-TYPED_TEST(Matrix, ConvertToCsr)
+TYPED_TEST(Matrix, ConvertToCsrContiguousRanges)
 {
     using value_type = typename TestFixture::value_type;
     auto dist_mat = TestFixture::Mtx::create(this->ref);
@@ -224,7 +225,6 @@ TYPED_TEST(Matrix, ConvertToCsr)
     auto converted = TestFixture::GMtx::create(this->ref);
     this->global_y->fill(gko::zero<value_type>());
     this->dist_y->fill(gko::zero<value_type>());
-    auto p_id = dist_mat->get_communicator()->rank();
     dist_mat->read_distributed(this->mat_input, this->part,
                                gko::distributed::data_placement::local);
     global_mat->read(this->mat_input);
@@ -237,6 +237,59 @@ TYPED_TEST(Matrix, ConvertToCsr)
         GKO_ASSERT(converted->get_num_stored_elements() == 0);
     }
 }
+
+TYPED_TEST(Matrix, ConvertToCsrContiguousRangesPermuted)
+{
+    using value_type = typename TestFixture::value_type;
+    using local_index_type = typename TestFixture::local_index_type;
+    auto dist_mat = TestFixture::Mtx::create(this->ref);
+    auto global_mat = TestFixture::GMtx::create(this->ref);
+    auto converted = TestFixture::GMtx::create(this->ref);
+    this->global_y->fill(gko::zero<value_type>());
+    this->dist_y->fill(gko::zero<value_type>());
+    auto part = gko::share(
+        gko::distributed::Partition<local_index_type>::build_from_mapping(
+            this->ref, gko::Array<comm_index_type>{this->ref, {2, 1, 1, 0, 0}},
+            3));
+    dist_mat->read_distributed(this->mat_input, part,
+                               gko::distributed::data_placement::local);
+    global_mat->read(this->mat_input);
+
+    dist_mat->convert_to(converted.get());
+
+    if (dist_mat->get_communicator()->rank() == 0) {
+        GKO_ASSERT_MTX_NEAR(global_mat.get(), converted.get(), 0);
+    } else {
+        GKO_ASSERT(converted->get_num_stored_elements() == 0);
+    }
+}
+
+TYPED_TEST(Matrix, ConvertToCsrScatteredRanges)
+{
+    using value_type = typename TestFixture::value_type;
+    using local_index_type = typename TestFixture::local_index_type;
+    auto dist_mat = TestFixture::Mtx::create(this->ref);
+    auto converted = TestFixture::GMtx::create(this->ref);
+    auto global_mat = TestFixture::GMtx::create(this->ref);
+    this->global_y->fill(gko::zero<value_type>());
+    this->dist_y->fill(gko::zero<value_type>());
+    auto part = gko::share(
+        gko::distributed::Partition<local_index_type>::build_from_mapping(
+            this->ref, gko::Array<comm_index_type>{this->ref, {0, 1, 2, 0, 1}},
+            3));
+    dist_mat->read_distributed(this->mat_input, part,
+                               gko::distributed::data_placement::local);
+    global_mat->read(this->mat_input);
+
+    dist_mat->convert_to(converted.get());
+
+    if (dist_mat->get_communicator()->rank() == 0) {
+        GKO_ASSERT_MTX_NEAR(global_mat.get(), converted.get(), 0);
+    } else {
+        GKO_ASSERT(converted->get_num_stored_elements() == 0);
+    }
+}
+
 
 }  // namespace
 
