@@ -219,7 +219,7 @@ Array<global_index_type> build_block_gather_permute(
 {
     auto exec = partition->get_executor();
     Array<global_index_type> permute{exec, partition->get_size()};
-
+    exec->run(partition::make_build_block_gathered_permute(partition, permute));
     return permute;
 }
 #define GKO_DECLARE_BUILD_BLOCK_GATHER_PERMUTE(_type)    \
