@@ -355,26 +355,6 @@ void gather_contiguous_rows(
     }
 }
 
-template <typename LocalIndexType>
-bool is_permuted(std::shared_ptr<const Partition<LocalIndexType>> partition)
-{
-    if (partition->get_num_parts() == partition->get_num_ranges()) {
-        std::vector<comm_index_type> part_ids_copy(partition->get_num_parts());
-        auto exec = partition->get_executor();
-        exec->get_master()->copy_from(exec.get(), partition->get_num_parts(),
-                                      partition->get_const_part_ids(),
-                                      part_ids_copy.data());
-        for (int i = 0; i < part_ids_copy.size(); ++i) {
-            if (i != part_ids_copy[i]) {
-                return true;
-            }
-        }
-        return false;
-    } else {
-        return true;
-    }
-}
-
 
 template <typename ValueType, typename LocalIndexType>
 void Matrix<ValueType, LocalIndexType>::convert_to(
@@ -442,13 +422,13 @@ void Matrix<ValueType, LocalIndexType>::convert_to(
     mpi::gather(merged_local->get_const_values(), local_nnz, global_values,
                 recv_counts.data(), recv_offsets.data(), 0, comm);
 
-    if (is_permuted(partition_)) {
-        auto row_permutation = build_block_gather_permute(partition_);
+    if (is_connected(partition_.get()) && is_ordered(partition_.get())) {
+        tmp->move_to(result);
+    } else {
+        auto row_permutation = build_block_gather_permute(partition_.get());
         gko::as<gko::matrix::Csr<ValueType, global_index_type>>(
             tmp->row_permute(&row_permutation))
             ->move_to(result);
-    } else {
-        tmp->move_to(result);
     }
 }
 
