@@ -225,6 +225,17 @@ void Vector<ValueType, LocalIndexType>::read_distributed(
 
 
 template <typename ValueType, typename LocalIndexType>
+void Vector<ValueType, LocalIndexType>::read_distributed(
+    const matrix::Dense<ValueType> *data,
+    std::shared_ptr<const Partition<LocalIndexType>> partition)
+{
+    gko::matrix_data<ValueType, global_index_type> matrixData;
+    data->write(matrixData);
+    read_distributed(matrixData, std::move(partition));
+}
+
+
+template <typename ValueType, typename LocalIndexType>
 void Vector<ValueType, LocalIndexType>::scale(const LinOp *alpha)
 {
     this->get_local()->scale(alpha);

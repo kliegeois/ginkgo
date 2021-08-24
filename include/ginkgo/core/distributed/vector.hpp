@@ -96,6 +96,10 @@ public:
         const matrix_data<ValueType, global_index_type> &data,
         std::shared_ptr<const Partition<LocalIndexType>> partition);
 
+    void read_distributed(
+        const matrix::Dense<ValueType> *data,
+        std::shared_ptr<const Partition<LocalIndexType>> partition);
+
     std::unique_ptr<absolute_type> compute_absolute() const override;
 
     void compute_absolute_inplace() override;
