@@ -56,8 +56,8 @@ std::unique_ptr<distributed::Vector<ValueType>> create_with_same_size(
     const distributed::Vector<ValueType> *mtx)
 {
     return distributed::Vector<ValueType>::create(
-        mtx->get_executor(), mtx->get_communicator(), mtx->get_size(),
-        mtx->get_local()->get_size());
+        mtx->get_executor(), mtx->get_communicator(), mtx->get_partition(),
+        mtx->get_size(), mtx->get_local()->get_size());
 }
 
 

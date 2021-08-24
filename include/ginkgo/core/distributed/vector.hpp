@@ -161,17 +161,25 @@ public:
     // Promise not to break things? :)
     local_mtx_type* get_local();
 
+    std::shared_ptr<const Partition<LocalIndexType>> get_partition() const
+    {
+        return partition_;
+    }
+
     void validate_data() const override;
 
 protected:
     Vector(std::shared_ptr<const Executor> exec,
-           std::shared_ptr<mpi::communicator> comm, dim<2> global_size,
-           dim<2> local_size, size_type stride);
+           std::shared_ptr<mpi::communicator> comm,
+           std::shared_ptr<const Partition<LocalIndexType>> partition,
+           dim<2> global_size, dim<2> local_size, size_type stride);
 
-    Vector(std::shared_ptr<const Executor> exec,
-           std::shared_ptr<mpi::communicator> comm =
-               std::make_shared<mpi::communicator>(),
-           dim<2> global_size = {}, dim<2> local_size = {});
+    explicit Vector(
+        std::shared_ptr<const Executor> exec,
+        std::shared_ptr<mpi::communicator> comm =
+            std::make_shared<mpi::communicator>(),
+        std::shared_ptr<const Partition<LocalIndexType>> partition = nullptr,
+        dim<2> global_size = {}, dim<2> local_size = {});
 
     void apply_impl(const LinOp*, LinOp*) const override;
 

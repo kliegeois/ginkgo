@@ -147,9 +147,9 @@ Vector<ValueType, LocalIndexType>::compute_absolute() const
 {
     auto exec = this->get_executor();
 
-    auto result =
-        absolute_type::create(exec, this->get_communicator(), this->get_size(),
-                              this->get_local()->get_size());
+    auto result = absolute_type::create(exec, this->get_communicator(),
+                                        this->get_partition(), this->get_size(),
+                                        this->get_local()->get_size());
 
     exec->run(vector::make_outplace_absolute_dense(this->get_local(),
                                                    result->get_local()));
@@ -184,11 +184,12 @@ Vector<ValueType, LocalIndexType>::get_local()
 template <typename ValueType, typename LocalIndexType>
 Vector<ValueType, LocalIndexType>::Vector(
     std::shared_ptr<const Executor> exec,
-    std::shared_ptr<mpi::communicator> comm, dim<2> global_size,
-    dim<2> local_size, size_type stride)
+    std::shared_ptr<mpi::communicator> comm,
+    std::shared_ptr<const Partition<LocalIndexType>> partition,
+    dim<2> global_size, dim<2> local_size, size_type stride)
     : EnableLinOp<Vector<ValueType, LocalIndexType>>{exec, global_size},
       DistributedBase{comm},
-      partition_{},
+      partition_{std::move(partition)},
       local_{exec, local_size, stride}
 {}
 
@@ -196,9 +197,11 @@ Vector<ValueType, LocalIndexType>::Vector(
 template <typename ValueType, typename LocalIndexType>
 Vector<ValueType, LocalIndexType>::Vector(
     std::shared_ptr<const Executor> exec,
-    std::shared_ptr<mpi::communicator> comm, dim<2> global_size,
-    dim<2> local_size)
-    : Vector{exec, comm, global_size, local_size, local_size[1]}
+    std::shared_ptr<mpi::communicator> comm,
+    std::shared_ptr<const Partition<LocalIndexType>> partition,
+    dim<2> global_size, dim<2> local_size)
+    : Vector{std::move(exec), std::move(comm), std::move(partition),
+             global_size,     local_size,      local_size[1]}
 {}
 
 
