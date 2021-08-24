@@ -189,33 +189,33 @@ GKO_INSTANTIATE_FOR_EACH_INDEX_TYPE(GKO_DECLARE_PARTITION);
 
 
 template <typename LocalIndexType>
-bool is_connected(const std::shared_ptr<Partition<LocalIndexType>> &partition)
+bool is_connected(const Partition<LocalIndexType> *partition)
 {
     return partition->get_num_parts() == partition->get_num_ranges();
 }
 
 #define GKO_DECLARE_IS_CONNECTED(_type) \
-    bool is_connected(const std::shared_ptr<Partition<_type>> &partition)
+    bool is_connected(const Partition<_type> *partition)
 GKO_INSTANTIATE_FOR_EACH_INDEX_TYPE(GKO_DECLARE_IS_CONNECTED);
 
 
 template <typename LocalIndexType>
-bool is_ordered(const std::shared_ptr<Partition<LocalIndexType>> &partition)
+bool is_ordered(const Partition<LocalIndexType> *partition)
 {
     auto exec = partition->get_executor();
     bool is_ordered;
-    exec->run(partition::make_is_ordered(partition.get(), &is_ordered));
+    exec->run(partition::make_is_ordered(partition, &is_ordered));
     return is_ordered;
 }
 
 #define GKO_DECLARE_IS_ORDERED(_type) \
-    bool is_ordered(const std::shared_ptr<Partition<_type>> &partition)
+    bool is_ordered(const Partition<_type> *partition)
 GKO_INSTANTIATE_FOR_EACH_INDEX_TYPE(GKO_DECLARE_IS_ORDERED);
 
 
 template <typename LocalIndexType>
 Array<global_index_type> build_block_gather_permute(
-    std::shared_ptr<const Partition<LocalIndexType>> partition)
+    const Partition<LocalIndexType> *partition)
 {
     auto exec = partition->get_executor();
     Array<global_index_type> permute{exec, partition->get_size()};
@@ -224,7 +224,7 @@ Array<global_index_type> build_block_gather_permute(
 }
 #define GKO_DECLARE_BUILD_BLOCK_GATHER_PERMUTE(_type)    \
     Array<global_index_type> build_block_gather_permute( \
-        std::shared_ptr<const Partition<_type>> partition)
+        const Partition<_type> *partition)
 GKO_INSTANTIATE_FOR_EACH_INDEX_TYPE(GKO_DECLARE_BUILD_BLOCK_GATHER_PERMUTE);
 
 

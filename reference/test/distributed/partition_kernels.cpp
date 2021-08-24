@@ -171,7 +171,7 @@ TYPED_TEST(Partition, IsConnected)
             this->ref, gko::Array<comm_index_type>{this->ref, {0, 0, 1, 1, 2}},
             3));
 
-    ASSERT_TRUE(gko::distributed::is_connected(part));
+    ASSERT_TRUE(gko::distributed::is_connected(part.get()));
 }
 
 
@@ -183,7 +183,7 @@ TYPED_TEST(Partition, IsConnectedUnordered)
             this->ref, gko::Array<comm_index_type>{this->ref, {1, 1, 0, 0, 2}},
             3));
 
-    ASSERT_TRUE(gko::distributed::is_connected(part));
+    ASSERT_TRUE(gko::distributed::is_connected(part.get()));
 }
 
 
@@ -195,7 +195,7 @@ TYPED_TEST(Partition, IsConnectedFail)
             this->ref, gko::Array<comm_index_type>{this->ref, {0, 1, 2, 0, 1}},
             3));
 
-    ASSERT_FALSE(gko::distributed::is_connected(part));
+    ASSERT_FALSE(gko::distributed::is_connected(part.get()));
 }
 
 
@@ -207,7 +207,7 @@ TYPED_TEST(Partition, IsOrdered)
             this->ref, gko::Array<comm_index_type>{this->ref, {1, 1, 0, 0, 2}},
             3));
 
-    ASSERT_FALSE(gko::distributed::is_ordered(part));
+    ASSERT_FALSE(gko::distributed::is_ordered(part.get()));
 }
 
 
@@ -219,7 +219,7 @@ TYPED_TEST(Partition, IsOrderedFail)
             this->ref, gko::Array<comm_index_type>{this->ref, {0, 1, 1, 2, 2}},
             3));
 
-    ASSERT_TRUE(gko::distributed::is_ordered(part));
+    ASSERT_TRUE(gko::distributed::is_ordered(part.get()));
 }
 
 

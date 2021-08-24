@@ -224,17 +224,17 @@ private:
 
 
 template <typename LocalIndexType>
-bool is_connected(const std::shared_ptr<Partition<LocalIndexType>> &partition);
+bool is_connected(const Partition<LocalIndexType> *partition);
 
 template <typename LocalIndexType>
-bool is_ordered(const std::shared_ptr<Partition<LocalIndexType>> &partition);
+bool is_ordered(const Partition<LocalIndexType> *partition);
 
 /**
  * Creates a permutation that maps gathered indices to global indices
  */
 template <typename LocalIndexType>
 Array<global_index_type> build_block_gather_permute(
-    std::shared_ptr<const Partition<LocalIndexType>> partition);
+    const Partition<LocalIndexType> *partition);
 
 
 }  // namespace distributed
