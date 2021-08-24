@@ -202,10 +202,14 @@ GKO_INSTANTIATE_FOR_EACH_INDEX_TYPE(GKO_DECLARE_IS_CONNECTED);
 template <typename LocalIndexType>
 bool is_ordered(const Partition<LocalIndexType> *partition)
 {
-    auto exec = partition->get_executor();
-    bool is_ordered;
-    exec->run(partition::make_is_ordered(partition, &is_ordered));
-    return is_ordered;
+    if (is_connected(partition)) {
+        auto exec = partition->get_executor();
+        bool is_ordered;
+        exec->run(partition::make_is_ordered(partition, &is_ordered));
+        return is_ordered;
+    } else {
+        return false;
+    }
 }
 
 #define GKO_DECLARE_IS_ORDERED(_type) \

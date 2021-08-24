@@ -422,7 +422,7 @@ void Matrix<ValueType, LocalIndexType>::convert_to(
     mpi::gather(merged_local->get_const_values(), local_nnz, global_values,
                 recv_counts.data(), recv_offsets.data(), 0, comm);
 
-    if (is_connected(partition_.get()) && is_ordered(partition_.get())) {
+    if (is_ordered(partition_.get())) {
         tmp->move_to(result);
     } else {
         auto row_permutation = build_block_gather_permute(partition_.get());
