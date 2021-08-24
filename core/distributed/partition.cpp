@@ -49,6 +49,7 @@ GKO_REGISTER_OPERATION(build_from_contiguous, partition::build_from_contiguous);
 GKO_REGISTER_OPERATION(build_ranks, partition::build_ranks);
 GKO_REGISTER_OPERATION(build_block_gathered_permute,
                        partition::build_block_gathered_permute);
+GKO_REGISTER_OPERATION(is_ordered, partition::is_ordered);
 
 
 }  // namespace partition
@@ -185,6 +186,31 @@ void Partition<LocalIndexType>::validate_data() const
 
 #define GKO_DECLARE_PARTITION(_type) class Partition<_type>
 GKO_INSTANTIATE_FOR_EACH_INDEX_TYPE(GKO_DECLARE_PARTITION);
+
+
+template <typename LocalIndexType>
+bool is_connected(const std::shared_ptr<Partition<LocalIndexType>> &partition)
+{
+    return partition->get_num_parts() == partition->get_num_ranges();
+}
+
+#define GKO_DECLARE_IS_CONNECTED(_type) \
+    bool is_connected(const std::shared_ptr<Partition<_type>> &partition)
+GKO_INSTANTIATE_FOR_EACH_INDEX_TYPE(GKO_DECLARE_IS_CONNECTED);
+
+
+template <typename LocalIndexType>
+bool is_ordered(const std::shared_ptr<Partition<LocalIndexType>> &partition)
+{
+    auto exec = partition->get_executor();
+    bool is_ordered;
+    exec->run(partition::make_is_ordered(partition.get(), &is_ordered));
+    return is_ordered;
+}
+
+#define GKO_DECLARE_IS_ORDERED(_type) \
+    bool is_ordered(const std::shared_ptr<Partition<_type>> &partition)
+GKO_INSTANTIATE_FOR_EACH_INDEX_TYPE(GKO_DECLARE_IS_ORDERED);
 
 
 template <typename LocalIndexType>
