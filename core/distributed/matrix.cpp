@@ -50,8 +50,6 @@ GKO_REGISTER_OPERATION(merge_diag_offdiag,
                        distributed_matrix::merge_diag_offdiag);
 GKO_REGISTER_OPERATION(map_to_global_idxs,
                        distributed_matrix::map_to_global_idxs);
-GKO_REGISTER_OPERATION(build_gathered_row_permute,
-                       distributed_matrix::build_gathered_row_permute);
 }  // namespace matrix
 
 
@@ -445,9 +443,7 @@ void Matrix<ValueType, LocalIndexType>::convert_to(
                 recv_counts.data(), recv_offsets.data(), 0, comm);
 
     if (is_permuted(partition_)) {
-        Array<global_index_type> row_permutation{exec, tmp->get_size()[0]};
-        exec->run(matrix::make_build_gathered_row_permute(partition_.get(),
-                                                          row_permutation));
+        auto row_permutation = build_block_gather_permute(partition_);
         gko::as<gko::matrix::Csr<ValueType, global_index_type>>(
             tmp->row_permute(&row_permutation))
             ->move_to(result);

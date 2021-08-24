@@ -77,15 +77,6 @@ void merge_diag_offdiag(
 GKO_INSTANTIATE_FOR_EACH_VALUE_TYPE(GKO_DECLARE_MERGE_DIAG_OFFDIAG);
 
 
-template <typename LocalIndexType>
-void build_gathered_row_permute(
-    std::shared_ptr<const DefaultExecutor> exec,
-    const distributed::Partition<LocalIndexType> *partition,
-    Array<global_index_type> &permutation) GKO_NOT_IMPLEMENTED;
-
-GKO_INSTANTIATE_FOR_EACH_INDEX_TYPE(GKO_DECLARE_BUILD_GATHERED_ROW_PERMUTE);
-
-
 }  // namespace distributed_matrix
 }  // namespace cuda
 }  // namespace kernels

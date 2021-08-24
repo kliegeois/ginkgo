@@ -47,6 +47,8 @@ GKO_REGISTER_OPERATION(count_ranges, partition::count_ranges);
 GKO_REGISTER_OPERATION(build_from_mapping, partition::build_from_mapping);
 GKO_REGISTER_OPERATION(build_from_contiguous, partition::build_from_contiguous);
 GKO_REGISTER_OPERATION(build_ranks, partition::build_ranks);
+GKO_REGISTER_OPERATION(build_block_gathered_permute,
+                       partition::build_block_gathered_permute);
 
 
 }  // namespace partition
@@ -183,6 +185,21 @@ void Partition<LocalIndexType>::validate_data() const
 
 #define GKO_DECLARE_PARTITION(_type) class Partition<_type>
 GKO_INSTANTIATE_FOR_EACH_INDEX_TYPE(GKO_DECLARE_PARTITION);
+
+
+template <typename LocalIndexType>
+Array<global_index_type> build_block_gather_permute(
+    std::shared_ptr<const Partition<LocalIndexType>> partition)
+{
+    auto exec = partition->get_executor();
+    Array<global_index_type> permute{exec, partition->get_size()};
+
+    return permute;
+}
+#define GKO_DECLARE_BUILD_BLOCK_GATHER_PERMUTE(_type)    \
+    Array<global_index_type> build_block_gather_permute( \
+        std::shared_ptr<const Partition<_type>> partition)
+GKO_INSTANTIATE_FOR_EACH_INDEX_TYPE(GKO_DECLARE_BUILD_BLOCK_GATHER_PERMUTE);
 
 
 }  // namespace distributed
