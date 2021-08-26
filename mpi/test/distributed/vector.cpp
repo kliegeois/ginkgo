@@ -75,7 +75,6 @@ protected:
     using local_entry = gko::matrix_data_entry<value_type, local_index_type>;
     using global_entry = gko::matrix_data_entry<value_type, global_index_type>;
     using Mtx = gko::distributed::Matrix<value_type, local_index_type>;
-    using GMtx = gko::matrix::Csr<value_type, global_index_type>;
     using Vec = gko::distributed::Vector<value_type, local_index_type>;
     using GVec = gko::matrix::Dense<value_type>;
     using Partition = gko::distributed::Partition<local_index_type>;

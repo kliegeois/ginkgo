@@ -233,7 +233,7 @@ bool is_ordered(const Partition<LocalIndexType> *partition);
  * Creates a permutation that maps gathered indices to global indices
  */
 template <typename LocalIndexType>
-Array<global_index_type> build_block_gather_permute(
+Array<LocalIndexType> build_block_gather_permute(
     const Partition<LocalIndexType> *partition);
 
 
