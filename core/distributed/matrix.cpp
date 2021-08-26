@@ -412,16 +412,10 @@ void Matrix<ValueType, LocalIndexType>::convert_to(
     auto global_col_idxs = tmp->get_col_idxs();
     auto global_values = tmp->get_values();
 
-    // send + recv row offsets block wise -> this ignores global row indices
-    // valid if partition is compact (get_num_ranges() == get_num_parts())
-    // and part_id == range_id
-    // if not compact: need to permute rows
-    // get permute from apply local-to-global map on each process + gather
     gather_contiguous_rows(exec, merged_local->get_const_row_ptrs(),
                            merged_local->get_size()[0], global_row_ptrs,
                            tmp->get_size()[0], this->partition_,
                            this->get_communicator());
-
     mpi::gather(merged_local->get_const_col_idxs(), local_nnz, global_col_idxs,
                 recv_counts.data(), recv_offsets.data(), 0, comm);
     mpi::gather(merged_local->get_const_values(), local_nnz, global_values,
