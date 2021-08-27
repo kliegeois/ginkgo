@@ -300,7 +300,7 @@ void compute_sqrt(std::shared_ptr<const HipExecutor> exec,
     auto size = data->get_size()[0] * data->get_size()[1];
     auto num_blocks = ceildiv(size, default_block_size);
     hipLaunchKernelGGL(HIP_KERNEL_NAME(kernel::compute_sqrt), num_blocks,
-                       default_block_size, 0, 0 data->get_size()[0],
+                       default_block_size, 0, 0, data->get_size()[0],
                        data->get_size()[1], data->get_stride(),
                        as_hip_type(data->get_values()));
 }
