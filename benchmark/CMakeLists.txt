@@ -104,6 +104,7 @@ add_subdirectory(matrix_statistics)
 add_subdirectory(preconditioner)
 add_subdirectory(solver)
 add_subdirectory(spmv)
+add_subdirectory(tools)
 
 add_custom_target(make_run_all_benchmarks ALL)
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/run_all_benchmarks.sh
