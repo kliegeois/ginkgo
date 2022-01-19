@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -36,11 +36,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <ginkgo/core/matrix/batch_csr.hpp>
 #include <ginkgo/core/matrix/batch_dense.hpp>
+#include <ginkgo/core/matrix/batch_ell.hpp>
 #include <ginkgo/core/preconditioner/batch_preconditioner_types.hpp>
 #include <ginkgo/core/stop/batch_stop_enum.hpp>
 
 
 #include "core/log/batch_logging.hpp"
+
 
 namespace gko {
 namespace kernels {
@@ -56,7 +58,6 @@ struct BatchBicgstabOptions {
     int max_its;
     RealType residual_tol;
     ::gko::stop::batch::ToleranceType tol_type;
-    int num_sh_vecs = 10;
 };
 
 
@@ -88,6 +89,133 @@ inline int local_memory_requirement(const int num_rows, const int num_rhs)
 {
     return (9 * num_rows * num_rhs) * sizeof(ValueType);
     //+ 2 * num_rhs * sizeof(typename gko::remove_complex<ValueType>);
+}
+
+
+struct StorageConfig {
+    // preconditioner storage
+    bool prec_shared;
+
+    // total number of shared vectors
+    int n_shared;
+
+    // number of vectors in global memory
+    int n_global;
+
+    // global stride from one batch entry to the next
+    int gmem_stride_bytes;
+};
+
+
+namespace {
+
+template <typename ValueType, int align_bytes>
+void set_gmem_stride_bytes(StorageConfig& sconf,
+                           const int multi_vector_size_bytes,
+                           const int prec_storage_bytes)
+{
+    int gmem_stride = sconf.n_global * multi_vector_size_bytes;
+    if (!sconf.prec_shared) {
+        gmem_stride += prec_storage_bytes;
+    }
+    // align global memory chunks
+    sconf.gmem_stride_bytes =
+        gmem_stride > 0 ? ((gmem_stride - 1) / align_bytes + 1) * align_bytes
+                        : 0;
+}
+
+}  // namespace
+
+
+/**
+ * Calculates the amount of in-solver storage needed by batch-Bicgstab and
+ * the split between shared and global memory.
+ *
+ * The calculation includes multivectors for
+ * - r
+ * - r_hat
+ * - p
+ * - p_hat
+ * - v
+ * - s
+ * - s_hat
+ * - t
+ * - x
+ * In addition, small arrays are needed for
+ * - rho_old
+ * - rho_new
+ * - omega
+ * - alpha
+ * - temp
+ * - rhs_norms
+ * - res_norms
+ *
+ * @param shared_mem_per_blk  The amount of shared memory per block to use for
+ *   keeping intermediate vectors. In case keeping the matrix in L1 cache etc.
+ *   should be prioritized, the cache configuration must be updated separately
+ *   and the needed space should be subtracted before passing to this
+ *   function.
+ * @param num_rows  Size of the matrix.
+ * @param num_nz  Number of nonzeros in the matrix
+ * @param num_rhs  Number of right-hand-sides in the vectors.
+ * @return  A struct containing allocation information specific to Bicgstab.
+ */
+template <typename Prectype, typename ValueType, int align_bytes = 32>
+StorageConfig compute_shared_storage(const int shared_mem_per_blk,
+                                     const int num_rows, const int num_nz,
+                                     const int num_rhs)
+{
+    using real_type = remove_complex<ValueType>;
+    const int vec_size = num_rows * num_rhs * sizeof(ValueType);
+    // const int padded_vec_size = ((vec_size - 1) / align_bytes + 1) *
+    // align_bytes; const int padded_multivec_len = padded_vec_size /
+    // sizeof(ValueType); assert(padded_multivec_len % sizeof(ValueType) == 0);
+    // const int num_value_scalars = 5 * num_rhs;
+    // const int num_real_scalars = 2 * num_rhs;
+    const int num_priority_vecs = 4;
+    const int prec_storage =
+        Prectype::dynamic_work_size(num_rows, num_nz) * sizeof(ValueType);
+    // int rem_shared = shared_mem_per_blk -
+    //                 num_value_scalars * sizeof(ValueType) -
+    //                 num_real_scalars * sizeof(real_type);
+    int rem_shared = shared_mem_per_blk;
+    StorageConfig sconf{false, 0, 9, 0};
+    if (rem_shared <= 0) {
+        set_gmem_stride_bytes<ValueType, align_bytes>(sconf, vec_size,
+                                                      prec_storage);
+        return sconf;
+    }
+    const int initial_vecs_available = rem_shared / vec_size;
+    const int priority_available = initial_vecs_available >= num_priority_vecs
+                                       ? num_priority_vecs
+                                       : initial_vecs_available;
+    sconf.n_shared += priority_available;
+    sconf.n_global -= priority_available;
+    // for simplicity, we don't allocate anything else in shared
+    //  if all the spmv vectors were not.
+    if (priority_available < num_priority_vecs) {
+        set_gmem_stride_bytes<ValueType, align_bytes>(sconf, vec_size,
+                                                      prec_storage);
+        return sconf;
+    }
+    rem_shared -= priority_available * vec_size;
+    if (rem_shared >= prec_storage) {
+        sconf.prec_shared = true;
+        rem_shared -= prec_storage;
+    }
+    const int shared_other_vecs =
+        rem_shared / vec_size >= 0 ? rem_shared / vec_size : 0;
+    sconf.n_shared += shared_other_vecs;
+    if (sconf.n_shared > 9) {
+        sconf.n_shared = 9;
+    }
+    sconf.n_global -= shared_other_vecs;
+    if (sconf.n_global < 0) {
+        sconf.n_global = 0;
+    }
+    set_gmem_stride_bytes<ValueType, align_bytes>(sconf, vec_size,
+                                                  prec_storage);
+    return sconf;
 }
 
 

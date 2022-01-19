@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -38,6 +38,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "core/matrix/batch_csr_kernels.hpp"
 #include "core/matrix/batch_dense_kernels.hpp"
+#include "core/matrix/batch_ell_kernels.hpp"
 #include "core/solver/batch_bicgstab_kernels.hpp"
 
 
@@ -89,24 +90,25 @@ void BatchBicgstab<ValueType>::apply_impl(const BatchLinOp* b,
                                           BatchLinOp* x) const
 {
     using Mtx = matrix::BatchCsr<ValueType>;
+    using EllMtx = matrix::BatchEll<ValueType>;
     using Vector = matrix::BatchDense<ValueType>;
     using real_type = remove_complex<ValueType>;
 
     auto exec = this->get_executor();
     auto dense_b = as<const Vector>(b);
     auto dense_x = as<Vector>(x);
+    const bool to_scale =
+        this->get_left_scaling_vector() && this->get_right_scaling_vector();
     const auto acsr = dynamic_cast<const Mtx*>(system_matrix_.get());
-    if (!acsr) {
+    const Mtx* a_scaled{};
+    const Vector* b_scaled{};
+    auto a_scaled_smart = Mtx::create(exec);
+    auto b_scaled_smart = Vector::create(exec);
+    if (to_scale && !acsr) {
         GKO_NOT_SUPPORTED(system_matrix_);
     }
 
     // copies to scale
-    auto a_scaled_smart = Mtx::create(exec);
-    auto b_scaled_smart = Vector::create(exec);
-    const Mtx* a_scaled{};
-    const Vector* b_scaled{};
-    const bool to_scale =
-        this->get_left_scaling_vector() && this->get_right_scaling_vector();
     if (to_scale) {
         a_scaled_smart->copy_from(acsr);
         b_scaled_smart->copy_from(dense_b);
@@ -115,16 +117,16 @@ void BatchBicgstab<ValueType>::apply_impl(const BatchLinOp* b,
             a_scaled_smart.get(), b_scaled_smart.get()));
         a_scaled = a_scaled_smart.get();
         b_scaled = b_scaled_smart.get();
-    } else {
+    } else if (acsr) {
         a_scaled = acsr;
         b_scaled = dense_b;
+    } else {
+        b_scaled = dense_b;
     }
-
     const kernels::batch_bicgstab::BatchBicgstabOptions<
         remove_complex<ValueType>>
         opts{parameters_.preconditioner, parameters_.max_iterations,
-             parameters_.residual_tol, parameters_.tolerance_type,
-             parameters_.num_shared_vectors};
+             parameters_.residual_tol, parameters_.tolerance_type};
 
     log::BatchLogData<ValueType> logdata;
 
@@ -140,9 +142,13 @@ void BatchBicgstab<ValueType>::apply_impl(const BatchLinOp* b,
     logdata.iter_counts.set_executor(this->get_executor());
     logdata.iter_counts.resize_and_reset(num_rhs * num_batches);
 
-    exec->run(
-        batch_bicgstab::make_apply(opts, a_scaled, b_scaled, dense_x, logdata));
-
+    if (acsr) {
+        exec->run(batch_bicgstab::make_apply(opts, a_scaled, b_scaled, dense_x,
+                                             logdata));
+    } else {
+        exec->run(batch_bicgstab::make_apply(opts, system_matrix_.get(),
+                                             b_scaled, dense_x, logdata));
+    }
     this->template log<log::Logger::batch_solver_completed>(
         logdata.iter_counts, logdata.res_norms.get());
 

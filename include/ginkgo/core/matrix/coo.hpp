@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -99,6 +99,7 @@ public:
     using value_type = ValueType;
     using index_type = IndexType;
     using mat_data = matrix_data<ValueType, IndexType>;
+    using device_mat_data = device_matrix_data<ValueType, IndexType>;
     using absolute_type = remove_complex<Coo>;
 
     friend class Coo<next_precision<ValueType>, IndexType>;
@@ -117,6 +118,8 @@ public:
     void move_to(Dense<ValueType>* other) override;
 
     void read(const mat_data& data) override;
+
+    void read(const device_mat_data& data) override;
 
     void write(mat_data& data) const override;
 
@@ -256,6 +259,32 @@ public:
                           make_temporary_clone(exec, b).get(),
                           make_temporary_clone(exec, x).get());
         return this;
+    }
+
+    /**
+     * Creates a constant (immutable) Coo matrix from a set of constant arrays.
+     *
+     * @param exec  the executor to create the matrix on
+     * @param size  the dimensions of the matrix
+     * @param values  the value array of the matrix
+     * @param col_idxs  the column index array of the matrix
+     * @param row_ptrs  the row index array of the matrix
+     * @returns A smart pointer to the constant matrix wrapping the input arrays
+     *          (if they reside on the same executor as the matrix) or a copy of
+     *          these arrays on the correct executor.
+     */
+    static std::unique_ptr<const Coo> create_const(
+        std::shared_ptr<const Executor> exec, const dim<2>& size,
+        gko::detail::ConstArrayView<ValueType>&& values,
+        gko::detail::ConstArrayView<IndexType>&& col_idxs,
+        gko::detail::ConstArrayView<IndexType>&& row_idxs)
+    {
+        // cast const-ness away, but return a const object afterwards,
+        // so we can ensure that no modifications take place.
+        return std::unique_ptr<const Coo>(new Coo{
+            exec, size, gko::detail::array_const_cast(std::move(values)),
+            gko::detail::array_const_cast(std::move(col_idxs)),
+            gko::detail::array_const_cast(std::move(row_idxs))});
     }
 
 protected:

@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -33,22 +33,22 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "core/solver/batch_cg_kernels.hpp"
 
 
-#include <hip/hip_runtime.h>
-
-
 #include <ginkgo/core/base/math.hpp>
 
 
-#include "hip/base/math.hip.hpp"
+#include "core/solver/batch_dispatch.hpp"
+#include "hip/base/config.hip.hpp"
+#include "hip/base/exception.hip.hpp"
 #include "hip/base/types.hip.hpp"
 #include "hip/components/cooperative_groups.hip.hpp"
+#include "hip/components/thread_ids.hip.hpp"
+#include "hip/matrix/batch_struct.hip.hpp"
 
 
 namespace gko {
 namespace kernels {
 namespace hip {
 
-#define GKO_CUDA_BATCH_USE_DYNAMIC_SHARED_MEM 1
 constexpr int default_block_size = 256;
 constexpr int sm_multiplier = 4;
 
@@ -59,31 +59,72 @@ constexpr int sm_multiplier = 4;
  */
 namespace batch_cg {
 
-// #include "common/components/uninitialized_array.hpp.inc"
 
+#include "common/cuda_hip/components/uninitialized_array.hpp.inc"
+// include all depedencies (note: do not remove this comment)
+#include "common/cuda_hip/matrix/batch_csr_kernels.hpp.inc"
+#include "common/cuda_hip/matrix/batch_dense_kernels.hpp.inc"
+#include "common/cuda_hip/matrix/batch_ell_kernels.hpp.inc"
+#include "common/cuda_hip/matrix/batch_vector_kernels.hpp.inc"
+#include "common/cuda_hip/solver/batch_cg_kernels.hpp.inc"
 
-// #include "common/log/batch_logger.hpp.inc"
-// #include "common/matrix/batch_csr_kernels.hpp.inc"
-// #include "common/matrix/batch_dense_kernels.hpp.inc"
-// #include "common/preconditioner/batch_identity.hpp.inc"
-// #include "common/preconditioner/batch_jacobi.hpp.inc"
-// #include "common/stop/batch_criteria.hpp.inc"
-
-
-// #include "common/solver/batch_cg_kernels.hpp.inc"
 
 template <typename T>
 using BatchCgOptions = gko::kernels::batch_cg::BatchCgOptions<T>;
 
 
+template <typename DValueType>
+class KernelCaller {
+public:
+    using value_type = DValueType;
+
+    KernelCaller(std::shared_ptr<const HipExecutor> exec,
+                 const BatchCgOptions<remove_complex<value_type>> opts)
+        : exec_{exec}, opts_{opts}
+    {}
+
+    template <typename BatchMatrixType, typename PrecType, typename StopType,
+              typename LogType>
+    void call_kernel(LogType logger, const BatchMatrixType& a,
+                     const gko::batch_dense::UniformBatch<const value_type>& b,
+                     const gko::batch_dense::UniformBatch<value_type>& x) const
+    {
+        using real_type = gko::remove_complex<value_type>;
+        const size_type nbatch = a.num_batch;
+
+        const int shared_size =
+            gko::kernels::batch_cg::local_memory_requirement<value_type>(
+                a.num_rows, b.num_rhs) +
+            PrecType::dynamic_work_size(a.num_rows, a.num_nnz) *
+                sizeof(value_type);
+
+        hipLaunchKernelGGL(apply_kernel<StopType>, dim3(nbatch),
+                           dim3(default_block_size), shared_size, 0,
+                           opts_.max_its, opts_.residual_tol, logger,
+                           PrecType(), a, b.values, x.values);
+
+        GKO_HIP_LAST_IF_ERROR_THROW;
+    }
+
+private:
+    std::shared_ptr<const HipExecutor> exec_;
+    const BatchCgOptions<remove_complex<value_type>> opts_;
+};
+
+
 template <typename ValueType>
 void apply(std::shared_ptr<const HipExecutor> exec,
-           const BatchCgOptions<remove_complex<ValueType>> &opts,
-           const BatchLinOp *const a,
-           const matrix::BatchDense<ValueType> *const b,
-           matrix::BatchDense<ValueType> *const x,
-           log::BatchLogData<ValueType> &logdata) GKO_NOT_IMPLEMENTED;
-
+           const BatchCgOptions<remove_complex<ValueType>>& opts,
+           const BatchLinOp* const a,
+           const matrix::BatchDense<ValueType>* const b,
+           matrix::BatchDense<ValueType>* const x,
+           log::BatchLogData<ValueType>& logdata)
+{
+    using d_value_type = hip_type<ValueType>;
+    auto dispatcher = batch_solver::create_dispatcher<ValueType>(
+        KernelCaller<d_value_type>(exec, opts), opts);
+    dispatcher.apply(a, b, x, logdata);
+}
 
 GKO_INSTANTIATE_FOR_EACH_VALUE_TYPE(GKO_DECLARE_BATCH_CG_APPLY_KERNEL);
 

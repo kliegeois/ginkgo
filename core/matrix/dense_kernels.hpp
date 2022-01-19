@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -43,6 +43,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ginkgo/core/base/math.hpp>
 #include <ginkgo/core/base/types.hpp>
 #include <ginkgo/core/matrix/diagonal.hpp>
+
+
+#include "core/base/kernel_declaration.hpp"
 
 
 namespace gko {
@@ -117,6 +120,17 @@ namespace kernels {
     void compute_norm2(std::shared_ptr<const DefaultExecutor> exec, \
                        const matrix::Dense<_type>* x,               \
                        matrix::Dense<remove_complex<_type>>* result)
+
+#define GKO_DECLARE_DENSE_COMPUTE_NORM1_KERNEL(_type)               \
+    void compute_norm1(std::shared_ptr<const DefaultExecutor> exec, \
+                       const matrix::Dense<_type>* x,               \
+                       matrix::Dense<remove_complex<_type>>* result)
+
+#define GKO_DECLARE_DENSE_FILL_IN_MATRIX_DATA_KERNEL(_type, _prec) \
+    void fill_in_matrix_data(                                      \
+        std::shared_ptr<const DefaultExecutor> exec,               \
+        const Array<matrix_data_entry<_type, _prec>>& data,        \
+        matrix::Dense<_type>* output)
 
 #define GKO_DECLARE_DENSE_CONVERT_TO_COO_KERNEL(_type, _prec)        \
     void convert_to_coo(std::shared_ptr<const DefaultExecutor> exec, \
@@ -272,6 +286,10 @@ namespace kernels {
     GKO_DECLARE_DENSE_COMPUTE_CONJ_DOT_KERNEL(ValueType);                   \
     template <typename ValueType>                                           \
     GKO_DECLARE_DENSE_COMPUTE_NORM2_KERNEL(ValueType);                      \
+    template <typename ValueType>                                           \
+    GKO_DECLARE_DENSE_COMPUTE_NORM1_KERNEL(ValueType);                      \
+    template <typename ValueType, typename IndexType>                       \
+    GKO_DECLARE_DENSE_FILL_IN_MATRIX_DATA_KERNEL(ValueType, IndexType);     \
     template <typename ValueType, typename IndexType>                       \
     GKO_DECLARE_DENSE_CONVERT_TO_COO_KERNEL(ValueType, IndexType);          \
     template <typename ValueType, typename IndexType>                       \
@@ -322,49 +340,7 @@ namespace kernels {
     GKO_DECLARE_GET_IMAG_KERNEL(ValueType)
 
 
-namespace omp {
-namespace dense {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace dense
-}  // namespace omp
-
-
-namespace cuda {
-namespace dense {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace dense
-}  // namespace cuda
-
-
-namespace reference {
-namespace dense {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace dense
-}  // namespace reference
-
-
-namespace hip {
-namespace dense {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace dense
-}  // namespace hip
-
-
-namespace dpcpp {
-namespace dense {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace dense
-}  // namespace dpcpp
+GKO_DECLARE_FOR_ALL_EXECUTOR_NAMESPACES(dense, GKO_DECLARE_ALL_AS_TEMPLATES);
 
 
 #undef GKO_DECLARE_ALL_AS_TEMPLATES

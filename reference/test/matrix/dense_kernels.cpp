@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -112,7 +112,7 @@ protected:
 };
 
 
-TYPED_TEST_SUITE(Dense, gko::test::ValueTypes);
+TYPED_TEST_SUITE(Dense, gko::test::ValueTypes, TypenameNameGenerator);
 
 
 TYPED_TEST(Dense, CopyRespectsStride)
@@ -603,6 +603,43 @@ TYPED_TEST(Dense, ComputesNorm2Mixed)
 
     EXPECT_EQ(result->at(0, 0), MixedT_nc{3.0});
     EXPECT_EQ(result->at(0, 1), MixedT_nc{5.0});
+}
+
+
+TYPED_TEST(Dense, ComputesNorm1)
+{
+    using Mtx = typename TestFixture::Mtx;
+    using T = typename TestFixture::value_type;
+    using T_nc = gko::remove_complex<T>;
+    using NormVector = gko::matrix::Dense<T_nc>;
+    auto mtx(gko::initialize<Mtx>(
+        {I<T>{1.0, 0.0}, I<T>{2.0, 3.0}, I<T>{2.0, 4.0}, I<T>{-1.0, -1.0}},
+        this->exec));
+    auto result = NormVector::create(this->exec, gko::dim<2>{1, 2});
+
+    mtx->compute_norm1(result.get());
+
+    EXPECT_EQ(result->at(0, 0), T_nc{6.0});
+    EXPECT_EQ(result->at(0, 1), T_nc{8.0});
+}
+
+
+TYPED_TEST(Dense, ComputesNorm1Mixed)
+{
+    using MixedMtx = typename TestFixture::MixedMtx;
+    using MixedT = typename MixedMtx::value_type;
+    using MixedT_nc = gko::remove_complex<MixedT>;
+    using MixedNormVector = gko::matrix::Dense<MixedT_nc>;
+    auto mtx(
+        gko::initialize<MixedMtx>({I<MixedT>{1.0, 0.0}, I<MixedT>{2.0, 3.0},
+                                   I<MixedT>{2.0, 4.0}, I<MixedT>{-1.0, -1.0}},
+                                  this->exec));
+    auto result = MixedNormVector::create(this->exec, gko::dim<2>{1, 2});
+
+    mtx->compute_norm1(result.get());
+
+    EXPECT_EQ(result->at(0, 0), MixedT_nc{6.0});
+    EXPECT_EQ(result->at(0, 1), MixedT_nc{8.0});
 }
 
 
@@ -4053,7 +4090,8 @@ protected:
 };
 
 
-TYPED_TEST_SUITE(DenseComplex, gko::test::ComplexValueTypes);
+TYPED_TEST_SUITE(DenseComplex, gko::test::ComplexValueTypes,
+                 TypenameNameGenerator);
 
 
 TYPED_TEST(DenseComplex, ScalesWithRealScalar)

@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -350,7 +350,7 @@ protected:
     std::unique_ptr<Mtx> mtx3_unsorted;
 };
 
-TYPED_TEST_SUITE(Csr, gko::test::ValueIndexTypes);
+TYPED_TEST_SUITE(Csr, gko::test::ValueIndexTypes, PairTypenameNameGenerator);
 
 
 TYPED_TEST(Csr, AppliesToDenseVector)
@@ -1506,6 +1506,44 @@ TYPED_TEST(Csr, AdvancedAppliesToMixedComplex)
 }
 
 
+TYPED_TEST(Csr, ScalesData)
+{
+    using Mtx = typename TestFixture::Mtx;
+    using T = typename TestFixture::value_type;
+    using Dense = gko::matrix::Dense<T>;
+    auto alpha = gko::initialize<Dense>({I<T>{2.0}}, this->exec);
+    auto to_scale = gko::clone(this->mtx2);
+
+    to_scale->scale(alpha.get());
+
+    GKO_ASSERT_MTX_EQ_SPARSITY(to_scale, this->mtx2);
+    EXPECT_EQ(to_scale->get_values()[0], T{2.0});
+    EXPECT_EQ(to_scale->get_values()[1], T{6.0});
+    EXPECT_EQ(to_scale->get_values()[2], T{4.0});
+    EXPECT_EQ(to_scale->get_values()[3], T{0.0});
+    EXPECT_EQ(to_scale->get_values()[4], T{10.0});
+}
+
+
+TYPED_TEST(Csr, InvScalesData)
+{
+    using Mtx = typename TestFixture::Mtx;
+    using T = typename TestFixture::value_type;
+    using Dense = gko::matrix::Dense<T>;
+    auto alpha = gko::initialize<Dense>({I<T>{2.0}}, this->exec);
+    auto to_scale = gko::clone(this->mtx2);
+
+    to_scale->inv_scale(alpha.get());
+
+    GKO_ASSERT_MTX_EQ_SPARSITY(to_scale, this->mtx2);
+    EXPECT_EQ(to_scale->get_values()[0], T{0.5});
+    EXPECT_EQ(to_scale->get_values()[1], T{1.5});
+    EXPECT_EQ(to_scale->get_values()[2], T{1.0});
+    EXPECT_EQ(to_scale->get_values()[3], T{0.0});
+    EXPECT_EQ(to_scale->get_values()[4], T{2.5});
+}
+
+
 template <typename ValueIndexType>
 class CsrComplex : public ::testing::Test {
 protected:
@@ -1516,7 +1554,8 @@ protected:
     using Mtx = gko::matrix::Csr<value_type, index_type>;
 };
 
-TYPED_TEST_SUITE(CsrComplex, gko::test::ComplexValueIndexTypes);
+TYPED_TEST_SUITE(CsrComplex, gko::test::ComplexValueIndexTypes,
+                 PairTypenameNameGenerator);
 
 
 TYPED_TEST(CsrComplex, MtxIsConjugateTransposable)
@@ -1582,6 +1621,103 @@ TYPED_TEST(CsrComplex, OutplaceAbsolute)
         abs_mtx, l({{1.0, 5.0, 2.0}, {5.0, 1.0, 0.0}, {0.0, 1.5, 2.0}}), 0.0);
     ASSERT_EQ(mtx->get_strategy()->get_name(),
               abs_mtx->get_strategy()->get_name());
+}
+
+
+TYPED_TEST(Csr, CanGetSubmatrix)
+{
+    using Vec = typename TestFixture::Vec;
+    using Mtx = typename TestFixture::Mtx;
+    using T = typename TestFixture::value_type;
+    /* this->mtx
+     * 1   3   2
+     * 0   5   0
+     */
+    auto sub_mat =
+        this->mtx->create_submatrix(gko::span(0, 2), gko::span(0, 2));
+    auto ref =
+        gko::initialize<Mtx>({I<T>{1.0, 3.0}, I<T>{0.0, 5.0}}, this->exec);
+
+    GKO_ASSERT_MTX_NEAR(sub_mat.get(), ref.get(), 0.0);
+}
+
+
+TYPED_TEST(Csr, CanGetSubmatrix2)
+{
+    using Vec = typename TestFixture::Vec;
+    using Mtx = typename TestFixture::Mtx;
+    using T = typename TestFixture::value_type;
+    auto mat = gko::initialize<Mtx>(
+        {
+            I<T>{1.0, 3.0, 4.5, 0.0, 2.0},   // 0
+            I<T>{1.0, 0.0, 4.5, 7.5, 3.0},   // 1
+            I<T>{0.0, 3.0, 4.5, 0.0, 2.0},   // 2
+            I<T>{0.0, -1.0, 2.5, 0.0, 2.0},  // 3
+            I<T>{1.0, 0.0, -1.0, 3.5, 1.0},  // 4
+            I<T>{0.0, 1.0, 0.0, 0.0, 2.0},   // 5
+            I<T>{0.0, 3.0, 0.0, 7.5, 1.0}    // 6
+        },
+        this->exec);
+    ASSERT_EQ(mat->get_num_stored_elements(), 23);
+    {
+        auto sub_mat1 = mat->create_submatrix(gko::span(0, 2), gko::span(0, 2));
+        auto ref1 =
+            gko::initialize<Mtx>({I<T>{1.0, 3.0}, I<T>{1.0, 0.0}}, this->exec);
+
+        GKO_EXPECT_MTX_NEAR(sub_mat1.get(), ref1.get(), 0.0);
+    }
+    {
+        auto sub_mat2 = mat->create_submatrix(gko::span(2, 4), gko::span(0, 2));
+        auto ref2 =
+            gko::initialize<Mtx>({I<T>{0.0, 3.0}, I<T>{0.0, -1.0}}, this->exec);
+
+        GKO_EXPECT_MTX_NEAR(sub_mat2.get(), ref2.get(), 0.0);
+    }
+    {
+        auto sub_mat3 = mat->create_submatrix(gko::span(0, 2), gko::span(3, 5));
+        auto ref3 =
+            gko::initialize<Mtx>({I<T>{0.0, 2.0}, I<T>{7.5, 3.0}}, this->exec);
+
+        GKO_EXPECT_MTX_NEAR(sub_mat3.get(), ref3.get(), 0.0);
+    }
+    {
+        auto sub_mat4 = mat->create_submatrix(gko::span(1, 6), gko::span(2, 4));
+        /*
+           4.5, 7.5
+           4.5, 0.0
+           2.5, 0.0
+          -1.0, 3.5
+           0.0, 0.0
+        */
+        auto ref4 = gko::initialize<Mtx>(
+            {I<T>{4.5, 7.5}, I<T>{4.5, 0.0}, I<T>{2.5, 0.0}, I<T>{-1.0, 3.5},
+             I<T>{0.0, 0.0}},
+            this->exec);
+
+        GKO_EXPECT_MTX_NEAR(sub_mat4.get(), ref4.get(), 0.0);
+    }
+    {
+        auto sub_mat5 = mat->create_submatrix(gko::span(0, 7), gko::span(0, 5));
+        auto ref5 = gko::initialize<Mtx>(
+            {
+                I<T>{1.0, 3.0, 4.5, 0.0, 2.0},   // 0
+                I<T>{1.0, 0.0, 4.5, 7.5, 3.0},   // 1
+                I<T>{0.0, 3.0, 4.5, 0.0, 2.0},   // 2
+                I<T>{0.0, -1.0, 2.5, 0.0, 2.0},  // 3
+                I<T>{1.0, 0.0, -1.0, 3.5, 1.0},  // 4
+                I<T>{0.0, 1.0, 0.0, 0.0, 2.0},   // 5
+                I<T>{0.0, 3.0, 0.0, 7.5, 1.0}    // 6
+            },
+            this->exec);
+
+        GKO_EXPECT_MTX_NEAR(sub_mat5.get(), ref5.get(), 0.0);
+    }
+    {
+        auto sub_mat7 = mat->create_submatrix(gko::span(0, 1), gko::span(0, 1));
+        auto ref7 = gko::initialize<Mtx>({I<T>{1.0}}, this->exec);
+
+        GKO_EXPECT_MTX_NEAR(sub_mat7.get(), ref7.get(), 0.0);
+    }
 }
 
 

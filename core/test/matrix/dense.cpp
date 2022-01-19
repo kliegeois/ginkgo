@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -80,7 +80,7 @@ protected:
     std::unique_ptr<gko::matrix::Dense<value_type>> mtx;
 };
 
-TYPED_TEST_SUITE(Dense, gko::test::ValueTypes);
+TYPED_TEST_SUITE(Dense, gko::test::ValueTypes, TypenameNameGenerator);
 
 
 TYPED_TEST(Dense, CanBeEmpty)
@@ -136,6 +136,25 @@ TYPED_TEST(Dense, CanBeConstructedFromExistingData)
     ASSERT_EQ(m->get_const_values(), data);
     ASSERT_EQ(m->at(2, 1), value_type{6.0});
     ASSERT_EQ(m->at(2, 2), value_type{-1.0});
+}
+
+
+TYPED_TEST(Dense, CanBeConstructedFromExistingConstData)
+{
+    using value_type = typename TestFixture::value_type;
+    // clang-format off
+    const value_type data[] = {
+        1.0, 2.0, -1.0,
+        3.0, 4.0, -1.0,
+        5.0, 6.0, -1.0};
+    // clang-format on
+
+    auto m = gko::matrix::Dense<TypeParam>::create_const(
+        this->exec, gko::dim<2>{3, 2},
+        gko::Array<value_type>::const_view(this->exec, 9, data), 3);
+
+    ASSERT_EQ(m->get_const_values(), data);
+    ASSERT_EQ(m->at(2, 1), value_type{6.0});
 }
 
 
@@ -374,6 +393,78 @@ TYPED_TEST(Dense, CanCreateRealView)
         EXPECT_EQ(real_view->at(1, 1), real_type{2.5});
         EXPECT_EQ(real_view->at(1, 2), real_type{3.5});
     }
+}
+
+
+class DenseConcatenation : public ::testing::Test {
+protected:
+    using value_type = std::complex<float>;
+    using mtx_type = gko::matrix::Dense<value_type>;
+
+    DenseConcatenation() : exec(gko::ReferenceExecutor::create()) {}
+
+    std::shared_ptr<const gko::ReferenceExecutor> exec;
+
+    std::vector<std::unique_ptr<mtx_type>> generate_matrices()
+    {
+        std::vector<std::unique_ptr<mtx_type>> matrices;
+        auto dense1 = mtx_type::create(exec, gko::dim<2>(3, 3));
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                dense1->at(i, j) = i / 2.0 + j / 2.0;
+            }
+        }
+        matrices.emplace_back(std::move(dense1));
+        auto dense2 = mtx_type::create(exec, gko::dim<2>(2, 3));
+        for (int i = 0; i < 2; i++) {
+            for (int j = 0; j < 3; j++) {
+                dense2->at(i, j) = value_type(1.0 * i, -1.0 * j);
+            }
+        }
+        matrices.emplace_back(std::move(dense2));
+        auto dense3 = mtx_type::create(exec, gko::dim<2>(1, 3));
+        for (int j = 0; j < 3; j++) {
+            dense3->at(0, j) = 10 - 2.0 * j;
+        }
+        matrices.emplace_back(std::move(dense3));
+        return matrices;
+    }
+
+    std::unique_ptr<mtx_type> result_matrix()
+    {
+        auto mtx = mtx_type::create(exec, gko::dim<2>(6, 3));
+        for (int j = 0; j < 3; j++) {
+            for (int i = 0; i < 3; i++) {
+                mtx->at(i, j) = i / 2.0 + j / 2.0;
+            }
+            for (int i = 3; i < 5; i++) {
+                mtx->at(i, j) = value_type(i - 3.0, -1.0 * j);
+            }
+            mtx->at(5, j) = 10 - 2.0 * j;
+        }
+        return mtx;
+    }
+};
+
+
+TEST_F(DenseConcatenation, ConcatenatesCorrectly)
+{
+    auto matrices = generate_matrices();
+    auto result = result_matrix();
+
+    auto concatenation = gko::concatenate_dense_matrices(exec, matrices);
+
+    GKO_ASSERT_MTX_NEAR(result, concatenation, 0.0);
+}
+
+TEST_F(DenseConcatenation, ThrowsOnMismatchedColumns)
+{
+    std::vector<std::unique_ptr<mtx_type>> matrices;
+    matrices.emplace_back(mtx_type::create(exec, gko::dim<2>(4, 2)));
+    matrices.emplace_back(mtx_type::create(exec, gko::dim<2>(4, 5)));
+
+    ASSERT_THROW(gko::concatenate_dense_matrices(exec, matrices),
+                 gko::DimensionMismatch);
 }
 
 

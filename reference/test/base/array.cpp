@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -61,7 +61,7 @@ protected:
     gko::Array<T> x;
 };
 
-TYPED_TEST_SUITE(Array, gko::test::ValueAndIndexTypes);
+TYPED_TEST_SUITE(Array, gko::test::ValueAndIndexTypes, TypenameNameGenerator);
 
 
 TYPED_TEST(Array, CanBeFilledWithValue)
@@ -73,6 +73,24 @@ TYPED_TEST(Array, CanBeFilledWithValue)
     ASSERT_EQ(this->x.get_data()[1], TypeParam{42});
     ASSERT_EQ(this->x.get_const_data()[0], TypeParam{42});
     ASSERT_EQ(this->x.get_const_data()[1], TypeParam{42});
+}
+
+
+TYPED_TEST(Array, CanBeReduced)
+{
+    auto out = gko::Array<TypeParam>(this->exec, I<TypeParam>{1});
+
+    gko::reduce_add(this->x, out);
+
+    ASSERT_EQ(out.get_data()[0], TypeParam{8});
+}
+
+
+TYPED_TEST(Array, CanBeReduced2)
+{
+    auto out = gko::reduce_add(this->x, TypeParam{2});
+
+    ASSERT_EQ(out, TypeParam{9});
 }
 
 

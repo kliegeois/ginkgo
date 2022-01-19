@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -54,9 +54,9 @@ constexpr int default_block_size = 512;
 
 template <typename KernelFunction, typename... KernelArgs>
 __global__ __launch_bounds__(default_block_size) void generic_kernel_1d(
-    size_type size, KernelFunction fn, KernelArgs... args)
+    int64 size, KernelFunction fn, KernelArgs... args)
 {
-    auto tidx = thread::get_thread_id_flat();
+    auto tidx = thread::get_thread_id_flat<int64>();
     if (tidx >= size) {
         return;
     }
@@ -66,9 +66,9 @@ __global__ __launch_bounds__(default_block_size) void generic_kernel_1d(
 
 template <typename KernelFunction, typename... KernelArgs>
 __global__ __launch_bounds__(default_block_size) void generic_kernel_2d(
-    size_type rows, size_type cols, KernelFunction fn, KernelArgs... args)
+    int64 rows, int64 cols, KernelFunction fn, KernelArgs... args)
 {
-    auto tidx = thread::get_thread_id_flat();
+    auto tidx = thread::get_thread_id_flat<int64>();
     auto col = tidx % cols;
     auto row = tidx / cols;
     if (row >= rows) {
@@ -82,22 +82,29 @@ template <typename KernelFunction, typename... KernelArgs>
 void run_kernel(std::shared_ptr<const HipExecutor> exec, KernelFunction fn,
                 size_type size, KernelArgs&&... args)
 {
-    gko::hip::device_guard guard{exec->get_device_id()};
-    constexpr auto block_size = default_block_size;
-    auto num_blocks = ceildiv(size, block_size);
-    hipLaunchKernelGGL(generic_kernel_1d, num_blocks, block_size, 0, 0, size,
-                       fn, map_to_device(args)...);
+    if (size > 0) {
+        gko::hip::device_guard guard{exec->get_device_id()};
+        constexpr auto block_size = default_block_size;
+        auto num_blocks = ceildiv(size, block_size);
+        hipLaunchKernelGGL(generic_kernel_1d, num_blocks, block_size, 0, 0,
+                           static_cast<int64>(size), fn,
+                           map_to_device(args)...);
+    }
 }
 
 template <typename KernelFunction, typename... KernelArgs>
 void run_kernel(std::shared_ptr<const HipExecutor> exec, KernelFunction fn,
                 dim<2> size, KernelArgs&&... args)
 {
-    gko::hip::device_guard guard{exec->get_device_id()};
-    constexpr auto block_size = default_block_size;
-    auto num_blocks = ceildiv(size[0] * size[1], block_size);
-    hipLaunchKernelGGL(generic_kernel_2d, num_blocks, block_size, 0, 0, size[0],
-                       size[1], fn, map_to_device(args)...);
+    if (size[0] * size[1] > 0) {
+        gko::hip::device_guard guard{exec->get_device_id()};
+        constexpr auto block_size = default_block_size;
+        auto num_blocks = ceildiv(size[0] * size[1], block_size);
+        hipLaunchKernelGGL(generic_kernel_2d, num_blocks, block_size, 0, 0,
+                           static_cast<int64>(size[0]),
+                           static_cast<int64>(size[1]), fn,
+                           map_to_device(args)...);
+    }
 }
 
 

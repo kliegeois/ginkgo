@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -227,6 +227,12 @@ int main()
     {
         using type1 = int;
         auto test = gko::dim<3, type1>{4, 4, 4};
+    }
+
+    // core/base/device_matrix_data.hpp
+    {
+        auto test =
+            gko::device_matrix_data<float, int>{exec, gko::dim<2>{1, 1}, 1};
     }
 
     // core/base/exception.hpp

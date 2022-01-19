@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -37,6 +37,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <complex>
 #include <initializer_list>
 #include <limits>
+#include <tuple>
 #include <type_traits>
 
 
@@ -44,6 +45,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 #include <ginkgo/core/base/math.hpp>
+#include <ginkgo/core/base/name_demangling.hpp>
 #include <ginkgo/core/base/types.hpp>
 
 
@@ -75,8 +77,28 @@ using ComplexValueTypes =
     ::testing::Types<std::complex<float>, std::complex<double>>;
 #endif
 
+using RealValueTypes =
+#if GINKGO_DPCPP_SINGLE_MODE
+    ::testing::Types<float>;
+#else
+    ::testing::Types<float, double>;
+#endif
+
 
 using IndexTypes = ::testing::Types<gko::int32, gko::int64>;
+
+
+using LocalGlobalIndexTypes =
+    ::testing::Types<std::tuple<int32, int32>, std::tuple<int32, int64>,
+                     std::tuple<int64, int64>>;
+
+
+using PODTypes =
+#if GINKGO_DPCPP_SINGLE_MODE
+    ::testing::Types<float, gko::int32, gko::int64>;
+#else
+    ::testing::Types<float, double, gko::int32, gko::int64>;
+#endif
 
 
 using ValueAndIndexTypes =
@@ -168,6 +190,31 @@ constexpr double r_mixed()
 
 template <typename T>
 using I = std::initializer_list<T>;
+
+
+struct TypenameNameGenerator {
+    template <typename T>
+    static std::string GetName(int i)
+    {
+        return gko::name_demangling::get_type_name(typeid(T));
+    }
+};
+
+
+struct PairTypenameNameGenerator {
+    template <typename T>
+    static std::string GetName(int i)
+    {
+        static_assert(std::tuple_size<T>::value == 2, "expected a pair");
+        return "<" +
+               gko::name_demangling::get_type_name(
+                   typeid(typename std::tuple_element<0, T>::type)) +
+               ", " +
+               gko::name_demangling::get_type_name(
+                   typeid(typename std::tuple_element<1, T>::type)) +
+               ">";
+    }
+};
 
 
 #endif  // GKO_CORE_TEST_UTILS_HPP_

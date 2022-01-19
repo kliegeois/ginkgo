@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -47,8 +47,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ginkgo/core/matrix/sparsity_csr.hpp>
 
 
-#include "core/components/absolute_array.hpp"
-#include "core/components/fill_array.hpp"
+#include "core/components/absolute_array_kernels.hpp"
+#include "core/components/device_matrix_data_kernels.hpp"
+#include "core/components/fill_array_kernels.hpp"
+#include "core/components/prefix_sum_kernels.hpp"
 #include "core/matrix/csr_kernels.hpp"
 
 
@@ -63,12 +65,17 @@ GKO_REGISTER_OPERATION(advanced_spmv, csr::advanced_spmv);
 GKO_REGISTER_OPERATION(spgemm, csr::spgemm);
 GKO_REGISTER_OPERATION(advanced_spgemm, csr::advanced_spgemm);
 GKO_REGISTER_OPERATION(spgeam, csr::spgeam);
+GKO_REGISTER_OPERATION(build_row_ptrs, components::build_row_ptrs);
+GKO_REGISTER_OPERATION(fill_in_matrix_data, csr::fill_in_matrix_data);
 GKO_REGISTER_OPERATION(convert_to_coo, csr::convert_to_coo);
 GKO_REGISTER_OPERATION(convert_to_dense, csr::convert_to_dense);
 GKO_REGISTER_OPERATION(convert_to_sellp, csr::convert_to_sellp);
 GKO_REGISTER_OPERATION(calculate_total_cols, csr::calculate_total_cols);
 GKO_REGISTER_OPERATION(convert_to_ell, csr::convert_to_ell);
 GKO_REGISTER_OPERATION(convert_to_hybrid, csr::convert_to_hybrid);
+GKO_REGISTER_OPERATION(calculate_nonzeros_per_row_in_span,
+                       csr::calculate_nonzeros_per_row_in_span);
+GKO_REGISTER_OPERATION(compute_submatrix, csr::compute_submatrix);
 GKO_REGISTER_OPERATION(transpose, csr::transpose);
 GKO_REGISTER_OPERATION(conj_transpose, csr::conj_transpose);
 GKO_REGISTER_OPERATION(inv_symm_permute, csr::inv_symm_permute);
@@ -85,10 +92,13 @@ GKO_REGISTER_OPERATION(is_sorted_by_column_index,
                        csr::is_sorted_by_column_index);
 GKO_REGISTER_OPERATION(extract_diagonal, csr::extract_diagonal);
 GKO_REGISTER_OPERATION(fill_array, components::fill_array);
+GKO_REGISTER_OPERATION(prefix_sum, components::prefix_sum);
 GKO_REGISTER_OPERATION(inplace_absolute_array,
                        components::inplace_absolute_array);
 GKO_REGISTER_OPERATION(outplace_absolute_array,
                        components::outplace_absolute_array);
+GKO_REGISTER_OPERATION(scale, csr::scale);
+GKO_REGISTER_OPERATION(inv_scale, csr::inv_scale);
 
 
 }  // anonymous namespace
@@ -314,45 +324,32 @@ void Csr<ValueType, IndexType>::move_to(Ell<ValueType, IndexType>* result)
 template <typename ValueType, typename IndexType>
 void Csr<ValueType, IndexType>::read(const mat_data& data)
 {
-    size_type nnz = 0;
-    for (const auto& elem : data.nonzeros) {
-        nnz += (elem.value != zero<ValueType>());
-    }
-    auto tmp = Csr::create(this->get_executor()->get_master(), data.size, nnz,
-                           this->get_strategy());
-    size_type ind = 0;
-    size_type cur_ptr = 0;
-    tmp->get_row_ptrs()[0] = cur_ptr;
-    for (size_type row = 0; row < data.size[0]; ++row) {
-        for (; ind < data.nonzeros.size(); ++ind) {
-            if (data.nonzeros[ind].row > row) {
-                break;
-            }
-            auto val = data.nonzeros[ind].value;
-            if (val != zero<ValueType>()) {
-                tmp->get_values()[cur_ptr] = val;
-                tmp->get_col_idxs()[cur_ptr] = data.nonzeros[ind].column;
-                ++cur_ptr;
-            }
-        }
-        tmp->get_row_ptrs()[row + 1] = cur_ptr;
-    }
-    tmp->make_srow();
-    tmp->move_to(this);
+    this->read(device_mat_data::create_view_from_host(
+        this->get_executor(), const_cast<mat_data&>(data)));
+}
+
+
+template <typename ValueType, typename IndexType>
+void Csr<ValueType, IndexType>::read(const device_mat_data& data)
+{
+    const auto nnz = data.nonzeros.get_num_elems();
+    auto exec = this->get_executor();
+    this->set_size(data.size);
+    this->row_ptrs_.resize_and_reset(data.size[0] + 1);
+    this->col_idxs_.resize_and_reset(nnz);
+    this->values_.resize_and_reset(nnz);
+    auto local_data = make_temporary_clone(exec, &data.nonzeros);
+    exec->run(csr::make_build_row_ptrs(*local_data, data.size[0],
+                                       this->get_row_ptrs()));
+    exec->run(csr::make_fill_in_matrix_data(*local_data, this));
+    this->make_srow();
 }
 
 
 template <typename ValueType, typename IndexType>
 void Csr<ValueType, IndexType>::write(mat_data& data) const
 {
-    std::unique_ptr<const LinOp> op{};
-    const Csr* tmp{};
-    if (this->get_executor()->get_master() != this->get_executor()) {
-        op = this->clone(this->get_executor()->get_master());
-        tmp = static_cast<const Csr*>(op.get());
-    } else {
-        tmp = this;
-    }
+    auto tmp = make_temporary_clone(this->get_executor()->get_master(), this);
 
     data = {tmp->get_size(), {}};
 
@@ -535,6 +532,31 @@ bool Csr<ValueType, IndexType>::is_sorted_by_column_index() const
 
 
 template <typename ValueType, typename IndexType>
+std::unique_ptr<Csr<ValueType, IndexType>>
+Csr<ValueType, IndexType>::create_submatrix(const gko::span& row_span,
+                                            const gko::span& column_span) const
+{
+    using Mat = Csr<ValueType, IndexType>;
+    auto exec = this->get_executor();
+    auto sub_mat_size = gko::dim<2>(row_span.length(), column_span.length());
+    Array<IndexType> row_ptrs(exec, row_span.length() + 1);
+    exec->run(csr::make_calculate_nonzeros_per_row_in_span(
+        this, row_span, column_span, &row_ptrs));
+    exec->run(csr::make_prefix_sum(row_ptrs.get_data(), row_span.length() + 1));
+    auto num_nnz =
+        exec->copy_val_to_host(row_ptrs.get_data() + sub_mat_size[0]);
+    auto sub_mat = Mat::create(exec, sub_mat_size,
+                               std::move(Array<ValueType>(exec, num_nnz)),
+                               std::move(Array<IndexType>(exec, num_nnz)),
+                               std::move(row_ptrs), this->get_strategy());
+    exec->run(csr::make_compute_submatrix(this, row_span, column_span,
+                                          sub_mat.get()));
+    sub_mat->make_srow();
+    return sub_mat;
+}
+
+
+template <typename ValueType, typename IndexType>
 std::unique_ptr<Diagonal<ValueType>>
 Csr<ValueType, IndexType>::extract_diagonal() const
 {
@@ -579,10 +601,80 @@ Csr<ValueType, IndexType>::compute_absolute() const
 }
 
 
+template <typename ValueType, typename IndexType>
+void Csr<ValueType, IndexType>::scale_impl(const LinOp* alpha)
+{
+    auto exec = this->get_executor();
+    exec->run(csr::make_scale(make_temporary_conversion<ValueType>(alpha).get(),
+                              this));
+}
+
+
+template <typename ValueType, typename IndexType>
+void Csr<ValueType, IndexType>::inv_scale_impl(const LinOp* alpha)
+{
+    auto exec = this->get_executor();
+    exec->run(csr::make_inv_scale(
+        make_temporary_conversion<ValueType>(alpha).get(), this));
+}
+
+
 #define GKO_DECLARE_CSR_MATRIX(ValueType, IndexType) \
     class Csr<ValueType, IndexType>
 GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(GKO_DECLARE_CSR_MATRIX);
 
 
 }  // namespace matrix
+
+
+#define GKO_DECLARE_BLOCK_DIAG_CSR_MATRIX(ValueType, IndexType)                \
+    std::unique_ptr<matrix::Csr<ValueType, IndexType>>                         \
+    create_block_diagonal_matrix(                                              \
+        std::shared_ptr<const Executor> exec,                                  \
+        const std::vector<std::unique_ptr<matrix::Csr<ValueType, IndexType>>>& \
+            matrices)
+
+template <typename ValueType, typename IndexType>
+GKO_DECLARE_BLOCK_DIAG_CSR_MATRIX(ValueType, IndexType)
+{
+    using mtx_type = matrix::Csr<ValueType, IndexType>;
+    size_type total_rows = 0, total_nnz = 0;
+    for (size_type imat = 0; imat < matrices.size(); imat++) {
+        GKO_ASSERT_IS_SQUARE_MATRIX(matrices[imat]);
+        total_rows += matrices[imat]->get_size()[0];
+        total_nnz += matrices[imat]->get_num_stored_elements();
+    }
+    Array<IndexType> h_row_ptrs(exec->get_master(), total_rows + 1);
+    Array<IndexType> h_col_idxs(exec->get_master(), total_nnz);
+    Array<ValueType> h_values(exec->get_master(), total_nnz);
+    size_type roffset = 0, nzoffset = 0;
+    for (size_type im = 0; im < matrices.size(); im++) {
+        auto imatrix = mtx_type::create(exec->get_master());
+        imatrix->copy_from(matrices[im].get());
+        const auto irowptrs = imatrix->get_const_row_ptrs();
+        const auto icolidxs = imatrix->get_const_col_idxs();
+        const auto ivalues = imatrix->get_const_values();
+        for (size_type irow = 0; irow < imatrix->get_size()[0]; irow++) {
+            h_row_ptrs.get_data()[irow + roffset] = irowptrs[irow] + nzoffset;
+            for (size_type inz = irowptrs[irow]; inz < irowptrs[irow + 1];
+                 inz++) {
+                h_col_idxs.get_data()[nzoffset + inz] = icolidxs[inz] + roffset;
+                h_values.get_data()[nzoffset + inz] = ivalues[inz];
+            }
+        }
+        roffset += imatrix->get_size()[0];
+        nzoffset += irowptrs[imatrix->get_size()[0]];
+    }
+    h_row_ptrs.get_data()[roffset] = nzoffset;
+    assert(nzoffset == total_nnz);
+    assert(roffset == total_rows);
+    auto outm = mtx_type::create(exec, dim<2>(total_rows, total_rows), h_values,
+                                 h_col_idxs, h_row_ptrs);
+    return outm;
+}
+
+GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(
+    GKO_DECLARE_BLOCK_DIAG_CSR_MATRIX);
+
+
 }  // namespace gko

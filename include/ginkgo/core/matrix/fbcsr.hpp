@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -148,6 +148,7 @@ public:
     using index_type = IndexType;
     using transposed_type = Fbcsr<ValueType, IndexType>;
     using mat_data = matrix_data<ValueType, IndexType>;
+    using device_mat_data = device_matrix_data<ValueType, IndexType>;
     using absolute_type = remove_complex<Fbcsr>;
 
     /**
@@ -201,6 +202,8 @@ public:
      * @warning Unlike Csr::read, here explicit non-zeros are NOT dropped.
      */
     void read(const mat_data& data) override;
+
+    void read(const device_mat_data& data) override;
 
     void write(mat_data& data) const override;
 
@@ -301,24 +304,48 @@ public:
     int get_block_size() const noexcept { return bs_; }
 
     /**
-     * Set the fixed block size for this matrix
-     *
-     * @param block_size The block size
-     */
-    void set_block_size(const int block_size) noexcept { bs_ = block_size; }
-
-    /**
      * @return The number of block-rows in the matrix
      */
     index_type get_num_block_rows() const noexcept
     {
-        return row_ptrs_.get_num_elems() - 1;
+        return this->get_size()[0] / bs_;
     }
 
     /**
      * @return The number of block-columns in the matrix
      */
-    index_type get_num_block_cols() const noexcept { return nbcols_; }
+    index_type get_num_block_cols() const noexcept
+    {
+        return this->get_size()[1] / bs_;
+    }
+
+    /**
+     * Creates a constant (immutable) Fbcsr matrix from a constant array.
+     *
+     * @param exec  the executor to create the matrix on
+     * @param size  the dimensions of the matrix
+     * @param blocksize  the block size of the matrix
+     * @param values  the value array of the matrix
+     * @param col_idxs  the block column index array of the matrix
+     * @param row_ptrs  the block row pointer array of the matrix
+     * @returns A smart pointer to the constant matrix wrapping the input arrays
+     *          (if they reside on the same executor as the matrix) or a copy of
+     *          the arrays on the correct executor.
+     */
+    static std::unique_ptr<const Fbcsr> create_const(
+        std::shared_ptr<const Executor> exec, const dim<2>& size, int blocksize,
+        gko::detail::ConstArrayView<ValueType>&& values,
+        gko::detail::ConstArrayView<IndexType>&& col_idxs,
+        gko::detail::ConstArrayView<IndexType>&& row_ptrs)
+    {
+        // cast const-ness away, but return a const object afterwards,
+        // so we can ensure that no modifications take place.
+        return std::unique_ptr<const Fbcsr>(
+            new Fbcsr{exec, size, blocksize,
+                      gko::detail::array_const_cast(std::move(values)),
+                      gko::detail::array_const_cast(std::move(col_idxs)),
+                      gko::detail::array_const_cast(std::move(row_ptrs))});
+    }
 
 protected:
     /**
@@ -337,20 +364,21 @@ protected:
      *
      * @param exec  Executor associated to the matrix
      * @param size  size of the matrix
-     * @param num_nonzeros  number of nonzeros
-     * @param block_size Size of the small dense square blocks
+     * @param num_nonzeros  number of stored nonzeros. It needs to be a multiple
+     *                      of block_size * block_size.
+     * @param block_size  size of the small dense square blocks
      */
     Fbcsr(std::shared_ptr<const Executor> exec, const dim<2>& size,
           size_type num_nonzeros, int block_size)
         : EnableLinOp<Fbcsr>(exec, size),
           bs_{block_size},
-          nbcols_{static_cast<index_type>(
-              detail::get_num_blocks(block_size, size[1]))},
           values_(exec, num_nonzeros),
           col_idxs_(exec, detail::get_num_blocks(block_size * block_size,
                                                  num_nonzeros)),
           row_ptrs_(exec, detail::get_num_blocks(block_size, size[0]) + 1)
-    {}
+    {
+        GKO_ASSERT_BLOCK_SIZE_CONFORMANT(size[1], bs_);
+    }
 
     /**
      * Creates a FBCSR matrix from already allocated (and initialized) row
@@ -380,8 +408,6 @@ protected:
           RowPtrsArray&& row_ptrs)
         : EnableLinOp<Fbcsr>(exec, size),
           bs_{block_size},
-          nbcols_{static_cast<index_type>(
-              detail::get_num_blocks(block_size, size[1]))},
           values_{exec, std::forward<ValuesArray>(values)},
           col_idxs_{exec, std::forward<ColIdxsArray>(col_idxs)},
           row_ptrs_{exec, std::forward<RowPtrsArray>(row_ptrs)}
@@ -398,7 +424,6 @@ protected:
 
 private:
     int bs_;                      ///< Block size
-    index_type nbcols_;           ///< Number of block-columns
     Array<value_type> values_;    ///< Non-zero values of all blocks
     Array<index_type> col_idxs_;  ///< Block-column indices of all blocks
     Array<index_type> row_ptrs_;  ///< Block-row pointers into @ref col_idxs_

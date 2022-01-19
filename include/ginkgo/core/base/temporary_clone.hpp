@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -169,6 +169,13 @@ public:
      * @return the underlying object
      */
     T* operator->() const { return handle_.get(); }
+
+    /**
+     * Dereferences the object held by temporary_clone.
+     *
+     * @return the underlying object
+     */
+    T& operator*() const { return *handle_; }
 
 private:
     // std::function deleter allows to decide the (type of) deleter at runtime

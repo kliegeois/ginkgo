@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -38,10 +38,11 @@ namespace gko {
 namespace matrices {
 
 
-const char *location_ani1_mtx = "@Ginkgo_BINARY_DIR@/matrices/test/ani1.mtx";
-const char *location_ani4_mtx = "@Ginkgo_BINARY_DIR@/matrices/test/ani4.mtx";
-const char *location_isai_mtxs = "@Ginkgo_BINARY_DIR@/matrices/test/";
-const char *location_1138_bus_mtx = "@Ginkgo_BINARY_DIR@/matrices/test/1138_bus.mtx";
+const char* location_ani1_mtx = "@Ginkgo_BINARY_DIR@/matrices/test/ani1.mtx";
+const char* location_ani4_mtx = "@Ginkgo_BINARY_DIR@/matrices/test/ani4.mtx";
+const char* location_isai_mtxs = "@Ginkgo_BINARY_DIR@/matrices/test/";
+const char* location_1138_bus_mtx =
+    "@Ginkgo_BINARY_DIR@/matrices/test/1138_bus.mtx";
 
 
 }  // namespace matrices

@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -48,6 +48,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ginkgo/core/matrix/sparsity_csr.hpp>
 
 
+#include "core/base/kernel_declaration.hpp"
+
+
 namespace gko {
 namespace kernels {
 
@@ -87,6 +90,12 @@ namespace kernels {
                 const matrix::Dense<ValueType>* beta,        \
                 const matrix::Csr<ValueType, IndexType>* b,  \
                 matrix::Csr<ValueType, IndexType>* c)
+
+#define GKO_DECLARE_CSR_FILL_IN_MATRIX_DATA_KERNEL(ValueType, IndexType) \
+    void fill_in_matrix_data(                                            \
+        std::shared_ptr<const DefaultExecutor> exec,                     \
+        const Array<matrix_data_entry<ValueType, IndexType>>& data,      \
+        matrix::Csr<ValueType, IndexType>* output)
 
 #define GKO_DECLARE_CSR_CONVERT_TO_DENSE_KERNEL(ValueType, IndexType)      \
     void convert_to_dense(std::shared_ptr<const DefaultExecutor> exec,     \
@@ -171,6 +180,18 @@ namespace kernels {
         const matrix::Csr<ValueType, IndexType>* source,             \
         Array<size_type>* result)
 
+#define GKO_DECLARE_CSR_CALC_NNZ_PER_ROW_IN_SPAN_KERNEL(ValueType, IndexType)  \
+    void calculate_nonzeros_per_row_in_span(                                   \
+        std::shared_ptr<const DefaultExecutor> exec,                           \
+        const matrix::Csr<ValueType, IndexType>* source, const span& row_span, \
+        const span& col_span, Array<IndexType>* row_nnz)
+
+#define GKO_DECLARE_CSR_COMPUTE_SUB_MATRIX_KERNEL(ValueType, IndexType)     \
+    void compute_submatrix(std::shared_ptr<const DefaultExecutor> exec,     \
+                           const matrix::Csr<ValueType, IndexType>* source, \
+                           gko::span row_span, gko::span col_span,          \
+                           matrix::Csr<ValueType, IndexType>* result)
+
 #define GKO_DECLARE_CSR_SORT_BY_COLUMN_INDEX(ValueType, IndexType)         \
     void sort_by_column_index(std::shared_ptr<const DefaultExecutor> exec, \
                               matrix::Csr<ValueType, IndexType>* to_sort)
@@ -185,6 +206,16 @@ namespace kernels {
                           const matrix::Csr<ValueType, IndexType>* orig, \
                           matrix::Diagonal<ValueType>* diag)
 
+#define GKO_DECLARE_CSR_SCALE_KERNEL(ValueType, IndexType)  \
+    void scale(std::shared_ptr<const DefaultExecutor> exec, \
+               const matrix::Dense<ValueType>* alpha,       \
+               matrix::Csr<ValueType, IndexType>* to_scale)
+
+#define GKO_DECLARE_CSR_INV_SCALE_KERNEL(ValueType, IndexType)  \
+    void inv_scale(std::shared_ptr<const DefaultExecutor> exec, \
+                   const matrix::Dense<ValueType>* alpha,       \
+                   matrix::Csr<ValueType, IndexType>* to_scale)
+
 #define GKO_DECLARE_ALL_AS_TEMPLATES                                         \
     template <typename ValueType, typename IndexType>                        \
     GKO_DECLARE_CSR_SPMV_KERNEL(ValueType, IndexType);                       \
@@ -196,6 +227,8 @@ namespace kernels {
     GKO_DECLARE_CSR_ADVANCED_SPGEMM_KERNEL(ValueType, IndexType);            \
     template <typename ValueType, typename IndexType>                        \
     GKO_DECLARE_CSR_SPGEAM_KERNEL(ValueType, IndexType);                     \
+    template <typename ValueType, typename IndexType>                        \
+    GKO_DECLARE_CSR_FILL_IN_MATRIX_DATA_KERNEL(ValueType, IndexType);        \
     template <typename ValueType, typename IndexType>                        \
     GKO_DECLARE_CSR_CONVERT_TO_DENSE_KERNEL(ValueType, IndexType);           \
     template <typename ValueType, typename IndexType>                        \
@@ -227,56 +260,22 @@ namespace kernels {
     template <typename ValueType, typename IndexType>                        \
     GKO_DECLARE_CSR_CALCULATE_NONZEROS_PER_ROW_KERNEL(ValueType, IndexType); \
     template <typename ValueType, typename IndexType>                        \
+    GKO_DECLARE_CSR_CALC_NNZ_PER_ROW_IN_SPAN_KERNEL(ValueType, IndexType);   \
+    template <typename ValueType, typename IndexType>                        \
+    GKO_DECLARE_CSR_COMPUTE_SUB_MATRIX_KERNEL(ValueType, IndexType);         \
+    template <typename ValueType, typename IndexType>                        \
     GKO_DECLARE_CSR_SORT_BY_COLUMN_INDEX(ValueType, IndexType);              \
     template <typename ValueType, typename IndexType>                        \
     GKO_DECLARE_CSR_IS_SORTED_BY_COLUMN_INDEX(ValueType, IndexType);         \
     template <typename ValueType, typename IndexType>                        \
-    GKO_DECLARE_CSR_EXTRACT_DIAGONAL(ValueType, IndexType)
+    GKO_DECLARE_CSR_EXTRACT_DIAGONAL(ValueType, IndexType);                  \
+    template <typename ValueType, typename IndexType>                        \
+    GKO_DECLARE_CSR_SCALE_KERNEL(ValueType, IndexType);                      \
+    template <typename ValueType, typename IndexType>                        \
+    GKO_DECLARE_CSR_INV_SCALE_KERNEL(ValueType, IndexType)
 
 
-namespace omp {
-namespace csr {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace csr
-}  // namespace omp
-
-
-namespace cuda {
-namespace csr {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace csr
-}  // namespace cuda
-
-
-namespace reference {
-namespace csr {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace csr
-}  // namespace reference
-
-
-namespace hip {
-namespace csr {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace csr
-}  // namespace hip
-
-
-namespace dpcpp {
-namespace csr {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace csr
-}  // namespace dpcpp
+GKO_DECLARE_FOR_ALL_EXECUTOR_NAMESPACES(csr, GKO_DECLARE_ALL_AS_TEMPLATES);
 
 
 #undef GKO_DECLARE_ALL_AS_TEMPLATES

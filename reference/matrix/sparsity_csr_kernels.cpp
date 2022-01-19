@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -115,6 +115,21 @@ void advanced_spmv(std::shared_ptr<const ReferenceExecutor> exec,
 
 GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(
     GKO_DECLARE_SPARSITY_CSR_ADVANCED_SPMV_KERNEL);
+
+
+template <typename ValueType, typename IndexType>
+void fill_in_matrix_data(
+    std::shared_ptr<const DefaultExecutor> exec,
+    const Array<matrix_data_entry<ValueType, IndexType>>& nonzeros,
+    matrix::SparsityCsr<ValueType, IndexType>* output)
+{
+    for (size_type i = 0; i < nonzeros.get_num_elems(); i++) {
+        output->get_col_idxs()[i] = nonzeros.get_const_data()[i].column;
+    }
+}
+
+GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(
+    GKO_DECLARE_SPARSITY_CSR_FILL_IN_MATRIX_DATA_KERNEL);
 
 
 template <typename ValueType, typename IndexType>

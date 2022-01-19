@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -66,21 +66,25 @@ public:
      * preconditioner values are to be stored.
      */
     __device__ __forceinline__ void generate(
+        const gko::batch_ell::BatchEntry<const ValueType>& mat, ValueType*)
+    {}
+
+
+    /**
+     * Sets the input and generates the identity preconditioner.(Nothing needs
+     * to be actually generated.)
+     *
+     * @param mat  Matrix for which to build an Ideniity preconditioner.
+     * @param work  A 'work-vector', which is unneecessary here as no
+     * preconditioner values are to be stored.
+     */
+    __device__ __forceinline__ void generate(
         const gko::batch_csr::BatchEntry<const ValueType>& mat, ValueType*)
     {}
 
-    __device__ __forceinline__ void apply(
-        const gko::batch_dense::BatchEntry<const ValueType>& r,
-        const gko::batch_dense::BatchEntry<ValueType>& z) const
-    {
-        for (int li = threadIdx.x; li < r.num_rows * r.num_rhs;
-             li += blockDim.x) {
-            const int row = li / r.num_rhs;
-            const int col = li % r.num_rhs;
-
-            z.values[row * z.stride + col] = r.values[row * r.stride + col];
-        }
-    }
+    __device__ __forceinline__ void generate(
+        const gko::batch_dense::BatchEntry<const ValueType>& mat, ValueType*)
+    {}
 
     __device__ __forceinline__ void apply(const int num_rows,
                                           const ValueType* const r,
@@ -96,6 +100,27 @@ public:
 template <typename ValueType>
 __global__ void batch_identity(
     BatchIdentity<ValueType> prec,
+    const gko::batch_ell::UniformBatch<const ValueType> a,
+    const gko::batch_dense::UniformBatch<const ValueType> b,
+    const gko::batch_dense::UniformBatch<ValueType> x)
+{
+    for (size_type batch = blockIdx.x; batch < a.num_batch;
+         batch += gridDim.x) {
+        const auto a_b = gko::batch::batch_entry(a, batch);
+        const auto b_b = gko::batch::batch_entry(b, batch);
+        const auto x_b = gko::batch::batch_entry(x, batch);
+
+        extern __shared__ char local_mem[];
+        const auto prec_work = reinterpret_cast<ValueType*>(local_mem);
+        prec.generate(a_b, prec_work);
+        prec.apply(b_b.num_rows, b_b.values, x_b.values);
+    }
+}
+
+
+template <typename ValueType>
+__global__ void batch_identity(
+    BatchIdentity<ValueType> prec,
     const gko::batch_csr::UniformBatch<const ValueType> a,
     const gko::batch_dense::UniformBatch<const ValueType> b,
     const gko::batch_dense::UniformBatch<ValueType> x)
@@ -106,10 +131,9 @@ __global__ void batch_identity(
         const auto b_b = gko::batch::batch_entry(b, batch);
         const auto x_b = gko::batch::batch_entry(x, batch);
 
-        //__shared__ ValueType prec_work[BatchJacobi<ValueType>::work_size];
         extern __shared__ char local_mem[];
         const auto prec_work = reinterpret_cast<ValueType*>(local_mem);
         prec.generate(a_b, prec_work);
-        prec.apply(b_b, x_b);
+        prec.apply(b_b.num_rows, b_b.values, x_b.values);
     }
 }

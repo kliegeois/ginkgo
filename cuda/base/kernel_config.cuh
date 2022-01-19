@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -48,7 +48,7 @@ namespace cuda {
  * \tparam ValueType  The scalar type used for computations.
  */
 template <typename ValueType>
-inline void configure_shared_memory()
+inline void configure_shared_memory_banks()
 {
     if (sizeof(ValueType) == 4) {
         cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeFourByte);

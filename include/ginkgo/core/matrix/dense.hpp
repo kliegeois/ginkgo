@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -138,8 +138,10 @@ public:
     using value_type = ValueType;
     using index_type = int64;
     using transposed_type = Dense<ValueType>;
-    using mat_data = gko::matrix_data<ValueType, int64>;
-    using mat_data32 = gko::matrix_data<ValueType, int32>;
+    using mat_data = matrix_data<ValueType, int64>;
+    using mat_data32 = matrix_data<ValueType, int32>;
+    using device_mat_data = device_matrix_data<ValueType, int64>;
+    using device_mat_data32 = device_matrix_data<ValueType, int32>;
     using absolute_type = remove_complex<Dense>;
     using real_type = absolute_type;
     using complex_type = to_complex<Dense>;
@@ -257,6 +259,10 @@ public:
     void read(const mat_data& data) override;
 
     void read(const mat_data32& data) override;
+
+    void read(const device_mat_data& data) override;
+
+    void read(const device_mat_data32& data) override;
 
     void write(mat_data& data) const override;
 
@@ -725,6 +731,20 @@ public:
     }
 
     /**
+     * Computes the column-wise (L^1) norm of this matrix.
+     *
+     * @param result  a Dense row vector, used to store the norm
+     *                (the number of columns in the vector must match the number
+     *                of columns of this)
+     */
+    void compute_norm1(LinOp* result) const
+    {
+        auto exec = this->get_executor();
+        this->compute_norm1_impl(
+            make_temporary_output_clone(exec, result).get());
+    }
+
+    /**
      * Create a submatrix from the original matrix.
      * Warning: defining stride for this create_submatrix method might cause
      * wrong memory access. Better use the create_submatrix(rows, columns)
@@ -799,6 +819,28 @@ public:
                     reinterpret_cast<const remove_complex<ValueType>*>(
                         this->get_const_values()))),
             stride);
+    }
+
+    /**
+     * Creates a constant (immutable) Dense matrix from a constant array.
+     *
+     * @param exec  the executor to create the matrix on
+     * @param size  the dimensions of the matrix
+     * @param values  the value array of the matrix
+     * @param stride  the row-stride of the matrix
+     * @returns A smart pointer to the constant matrix wrapping the input array
+     *          (if it resides on the same executor as the matrix) or a copy of
+     *          the array on the correct executor.
+     */
+    static std::unique_ptr<const Dense> create_const(
+        std::shared_ptr<const Executor> exec, const dim<2>& size,
+        gko::detail::ConstArrayView<ValueType>&& values, size_type stride)
+    {
+        // cast const-ness away, but return a const object afterwards,
+        // so we can ensure that no modifications take place.
+        return std::unique_ptr<const Dense>(new Dense{
+            exec, size, gko::detail::array_const_cast(std::move(values)),
+            stride});
     }
 
 protected:
@@ -938,6 +980,14 @@ protected:
      *        instead of compute_norm2(LinOp *result).
      */
     virtual void compute_norm2_impl(LinOp* result) const;
+
+    /**
+     * @copydoc compute_norm1(LinOp *) const
+     *
+     * @note  Other implementations of dense should override this function
+     *        instead of compute_norm1(LinOp *result).
+     */
+    virtual void compute_norm1_impl(LinOp* result) const;
 
     /**
      * @copydoc create_submatrix(const span, const span, const size_type)
@@ -1188,6 +1238,12 @@ std::unique_ptr<Matrix> initialize(
                               std::move(exec),
                               std::forward<TArgs>(create_args)...);
 }
+
+
+template <typename ValueType>
+std::unique_ptr<matrix::Dense<ValueType>> concatenate_dense_matrices(
+    std::shared_ptr<const Executor> exec,
+    const std::vector<std::unique_ptr<matrix::Dense<ValueType>>>& matrices);
 
 
 }  // namespace gko

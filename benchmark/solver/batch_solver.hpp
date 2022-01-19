@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -105,6 +105,9 @@ DEFINE_string(
     "s(idx) = sin(2*idx) + i * sin(2*idx+1) and `file` read the rhs from a "
     "file.");
 
+DEFINE_string(batch_solver_mat_format, "batch_csr",
+              "The matrix format to be used for the solver.");
+
 DEFINE_string(
     initial_guess_generation, "rhs",
     "Method used to generate the initial guess. Supported values are: "
@@ -127,6 +130,9 @@ DEFINE_bool(print_residuals_and_iters, false,
             "Whether to print the final residuals for each batch entry");
 DEFINE_bool(using_suite_sparse, true,
             "Whether the suitesparse matrices are being used");
+DEFINE_bool(
+    compute_errors, false,
+    "Solve with dense direct solver to compute exact solution and thus error");
 
 DEFINE_string(input_file, "", "Input JSON file");
 DEFINE_string(output_file, "", "Output JSON file");
@@ -346,6 +352,10 @@ void solve_system(const std::string& sol_name, const std::string& prec_name,
                           rapidjson::Value(rapidjson::kObjectType), allocator);
         auto& solver_json = solver_case[solver_name];
         const size_type nbatch = system_matrix->get_num_batch_entries();
+        add_or_set_member(
+            solver_json, "matrix_format",
+            rapidjson::StringRef(FLAGS_batch_solver_mat_format.c_str()),
+            allocator);
         add_or_set_member(solver_json, "num_batch_entries", nbatch, allocator);
         add_or_set_member(solver_json, "scaling",
                           rapidjson::StringRef(FLAGS_batch_scaling.c_str()),
@@ -433,8 +443,6 @@ void solve_system(const std::string& sol_name, const std::string& prec_name,
             auto gen_logger =
                 std::make_shared<OperationLogger>(exec, FLAGS_nested_names);
             exec->add_logger(gen_logger);
-            auto direct_solver =
-                generate_solver(exec, "direct", prec_type)->generate(mat_clone);
             auto solver =
                 generate_solver(exec, sol_name, prec_type)->generate(mat_clone);
 
@@ -452,29 +460,36 @@ void solve_system(const std::string& sol_name, const std::string& prec_name,
 
             solver->apply(lend(b_clone), lend(x_clone));
             exec->remove_logger(gko::lend(apply_logger));
-            direct_solver->apply(lend(b_clone), lend(exac_clone));
-            auto err = clone(exac_clone);
-            auto neg_one =
-                gko::batch_initialize<gko::matrix::BatchDense<etype>>(
-                    nbatch, {etype{-1.0}}, exec);
-            auto err_nrm =
-                gko::matrix::BatchDense<gko::remove_complex<etype>>::create(
-                    exec->get_master(),
-                    gko::batch_dim<2>(nbatch, gko::dim<2>(1, 1)));
-            err->add_scaled(neg_one.get(), x_clone.get());
-            err->compute_norm2(err_nrm.get());
-            exec->synchronize();
-            add_or_set_member(solver_json["apply"], "error_norm",
-                              rapidjson::Value(rapidjson::kObjectType),
-                              allocator);
-            for (size_type i = 0; i < nbatch; ++i) {
-                add_or_set_member(
-                    solver_json["apply"]["l2_error"], std::to_string(i).c_str(),
-                    rapidjson::Value(rapidjson::kArrayType), allocator);
-                for (size_type j = 0; j < nrhs; ++j) {
-                    solver_json["apply"]["l2_error"][std::to_string(i).c_str()]
-                        .PushBack(err_nrm->get_const_values()[i * nrhs + j],
+
+            if (FLAGS_compute_errors) {
+                auto direct_solver = generate_solver(exec, "direct", prec_type)
+                                         ->generate(mat_clone);
+                direct_solver->apply(lend(b_clone), lend(exac_clone));
+                auto err = clone(exac_clone);
+                auto neg_one =
+                    gko::batch_initialize<gko::matrix::BatchDense<etype>>(
+                        nbatch, {etype{-1.0}}, exec);
+                auto err_nrm =
+                    gko::matrix::BatchDense<gko::remove_complex<etype>>::create(
+                        exec->get_master(),
+                        gko::batch_dim<2>(nbatch, gko::dim<2>(1, 1)));
+                err->add_scaled(neg_one.get(), x_clone.get());
+                err->compute_norm2(err_nrm.get());
+                exec->synchronize();
+                add_or_set_member(solver_json["apply"], "error_norm",
+                                  rapidjson::Value(rapidjson::kObjectType),
                                   allocator);
+                for (size_type i = 0; i < nbatch; ++i) {
+                    add_or_set_member(solver_json["apply"]["l2_error"],
+                                      std::to_string(i).c_str(),
+                                      rapidjson::Value(rapidjson::kArrayType),
+                                      allocator);
+                    for (size_type j = 0; j < nrhs; ++j) {
+                        solver_json["apply"]["l2_error"][std::to_string(i)
+                                                             .c_str()]
+                            .PushBack(err_nrm->get_const_values()[i * nrhs + j],
+                                      allocator);
+                    }
                 }
             }
             exec->synchronize();
@@ -701,10 +716,10 @@ int read_data_and_launch_benchmark(int argc, char* argv[],
 
             if (FLAGS_using_suite_sparse) {
                 system_matrix = share(formats::batch_matrix_factory.at(
-                    "batch_csr")(exec, ndup, data[0]));
+                    FLAGS_batch_solver_mat_format)(exec, ndup, data[0]));
             } else {
                 system_matrix = share(formats::batch_matrix_factory2.at(
-                    "batch_csr")(exec, ndup, data));
+                    FLAGS_batch_solver_mat_format)(exec, ndup, data));
                 if (FLAGS_batch_scaling == "explicit") {
                     auto temp_scaling_op = formats::batch_matrix_factory2.at(
                         "batch_dense")(exec, ndup, scale_data);
@@ -742,14 +757,8 @@ int read_data_and_launch_benchmark(int argc, char* argv[],
 
             std::clog << "Batch Matrix has: "
                       << system_matrix->get_num_batch_entries()
-                      << " batches, each of size ("
-                      << system_matrix->get_size().at(0)[0] << ", "
-                      << system_matrix->get_size().at(0)[1]
-                      << ") , with total nnz "
-                      << gko::as<gko::matrix::BatchCsr<etype>>(
-                             system_matrix.get())
-                             ->get_num_stored_elements()
-                      << std::endl;
+                      << " batches, each of size "
+                      << system_matrix->get_size().at(0) << std::endl;
 
             auto sol_name = begin(solvers);
             for (const auto& solver_name : solvers) {

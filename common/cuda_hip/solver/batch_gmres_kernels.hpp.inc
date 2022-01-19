@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -53,9 +53,9 @@ __device__ __forceinline__ void initialize(
     __syncthreads();
 
     // r = b - A*x
-    single_advanced_spmv_kernel(static_cast<ValueType>(-1.0), a_gl_entry,
-                                x_shared_entry, static_cast<ValueType>(1.0),
-                                r_shared_entry);
+    single_advanced_matvec_kernel(static_cast<ValueType>(-1.0), a_gl_entry,
+                                  x_shared_entry, static_cast<ValueType>(1.0),
+                                  r_shared_entry);
     __syncthreads();
 
     if (threadIdx.x / config::warp_size == 0) {
@@ -125,7 +125,7 @@ __device__ __forceinline__ void arnoldi(
 
     const ValueType* const v_i_sh = V_shared_entry + inner_iter * num_rows;
 
-    single_spmv_kernel(a_gl_entry, v_i_sh, helper_shared_entry);
+    single_matvec_kernel(a_gl_entry, v_i_sh, helper_shared_entry);
     __syncthreads();
 
     prec_shared.apply(num_rows, helper_shared_entry, w_shared_entry);
@@ -260,10 +260,6 @@ __global__ void apply_kernel(const int global_gap, const int max_iter,
     using real_type = typename gko::remove_complex<ValueType>;
     const auto nbatch = a.num_batch;
     const auto nrows = a.num_rows;
-    constexpr int nrhs = 1;
-
-    // required for static allocation in stopping criterion
-    assert(batch_config<ValueType>::max_num_rhs >= nrhs);
 
     constexpr auto tile_size = config::warp_size;
     auto thread_block = group::this_thread_block();
@@ -277,14 +273,14 @@ __global__ void apply_kernel(const int global_gap, const int max_iter,
         extern __shared__ char local_mem_sh[];
         ValueType* const r_sh = reinterpret_cast<ValueType*>(local_mem_sh);
 #endif
-        ValueType* const z_sh = r_sh + nrows * nrhs;
-        ValueType* const w_sh = z_sh + nrows * nrhs;
-        ValueType* const x_sh = w_sh + nrows * nrhs;
-        ValueType* const helper_sh = x_sh + nrows * nrhs;
-        ValueType* const cs_sh = helper_sh + nrows * nrhs;
-        ValueType* const sn_sh = cs_sh + restart * nrhs;
-        ValueType* const y_sh = sn_sh + restart * nrhs;
-        ValueType* const s_sh = y_sh + restart * nrhs;
+        ValueType* const z_sh = r_sh + nrows;
+        ValueType* const w_sh = z_sh + nrows;
+        ValueType* const x_sh = w_sh + nrows;
+        ValueType* const helper_sh = x_sh + nrows;
+        ValueType* const cs_sh = helper_sh + nrows;
+        ValueType* const sn_sh = cs_sh + restart;
+        ValueType* const y_sh = sn_sh + restart;
+        ValueType* const s_sh = y_sh + restart;
 
         // Hessenberg matrix
         // const gko::batch_dense::BatchEntry<ValueType> H_shared_entry{
@@ -294,7 +290,7 @@ __global__ void apply_kernel(const int global_gap, const int max_iter,
         // the other in a row - when drawn on paper, (and the same is true for
         // actual storage as the storage order is row-major) to get entry (i,j)
         // for rhs: rhs_k , H_entry.stride*i + j*nrhs  + rhs_k
-        ValueType* const H_sh = s_sh + (restart + 1) * nrhs;
+        ValueType* const H_sh = s_sh + (restart + 1);
 
         // Krylov subspace basis vectors
         // storage:row-major order , subspace basis vectors corr. to each rhs
@@ -305,9 +301,9 @@ __global__ void apply_kernel(const int global_gap, const int max_iter,
         // are stored contiguously in memory one after the other.
         // const gko::batch_dense::BatchEntry<ValueType> V_shared_entry{
         //     V_sh, static_cast<size_type>(nrhs), nrows * (restart + 1), nrhs};
-        ValueType* const V_sh = H_sh + restart * (restart + 1) * nrhs;
+        ValueType* const V_sh = H_sh + restart * (restart + 1);
 
-        ValueType* const prec_work_sh = V_sh + nrows * (restart + 1) * nrhs;
+        ValueType* const prec_work_sh = V_sh + nrows * (restart + 1);
 
         // real_type *const norms_rhs_sh = reinterpret_cast<real_type *>(
         //     prec_work_sh + PrecType::dynamic_work_size(nrows, a.num_nnz));
@@ -323,7 +319,7 @@ __global__ void apply_kernel(const int global_gap, const int max_iter,
             gko::batch::batch_entry_ptr(x, 1, nrows, ibatch);
 
         // Stride of Hessenberg matrix
-        const auto h_stride = static_cast<size_type>(nrhs * restart);
+        const auto h_stride = static_cast<size_type>(restart);
 
         prec_shared.generate(a_gl_entry, prec_work_sh);
 
@@ -429,9 +425,9 @@ __global__ void apply_kernel(const int global_gap, const int max_iter,
             single_copy(nrows, b_entry_ptr, r_sh);
             __syncthreads();
             // r = r - A*x
-            single_advanced_spmv_kernel(static_cast<ValueType>(-1.0),
-                                        a_gl_entry, x_sh,
-                                        static_cast<ValueType>(1.0), r_sh);
+            single_advanced_matvec_kernel(static_cast<ValueType>(-1.0),
+                                          a_gl_entry, x_sh,
+                                          static_cast<ValueType>(1.0), r_sh);
             __syncthreads();
 
             if (threadIdx.x / config::warp_size == 0) {

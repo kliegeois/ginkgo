@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -61,10 +61,12 @@ void spmv(std::shared_ptr<const ReferenceExecutor> exec,
           const matrix::Dense<InputValueType>* b,
           matrix::Dense<OutputValueType>* c)
 {
+    using arithmetic_type =
+        highest_precision<InputValueType, OutputValueType, MatrixValueType>;
     using a_accessor =
-        gko::acc::reduced_row_major<1, OutputValueType, const MatrixValueType>;
+        gko::acc::reduced_row_major<1, arithmetic_type, const MatrixValueType>;
     using b_accessor =
-        gko::acc::reduced_row_major<2, OutputValueType, const InputValueType>;
+        gko::acc::reduced_row_major<2, arithmetic_type, const InputValueType>;
 
     const auto num_stored_elements_per_row =
         a->get_num_stored_elements_per_row();
@@ -76,16 +78,15 @@ void spmv(std::shared_ptr<const ReferenceExecutor> exec,
         std::array<size_type, 2>{{b->get_size()[0], b->get_size()[1]}},
         b->get_const_values(), std::array<size_type, 1>{{b->get_stride()}});
 
-    for (size_type row = 0; row < a->get_size()[0]; row++) {
-        for (size_type j = 0; j < c->get_size()[1]; j++) {
-            c->at(row, j) = zero<OutputValueType>();
-        }
-        for (size_type i = 0; i < num_stored_elements_per_row; i++) {
-            auto val = a_vals(row + i * stride);
-            auto col = a->col_at(row, i);
-            for (size_type j = 0; j < c->get_size()[1]; j++) {
-                c->at(row, j) += val * b_vals(col, j);
+    for (size_type j = 0; j < c->get_size()[1]; j++) {
+        for (size_type row = 0; row < a->get_size()[0]; row++) {
+            arithmetic_type result{};
+            for (size_type i = 0; i < num_stored_elements_per_row; i++) {
+                auto val = a_vals(row + i * stride);
+                auto col = a->col_at(row, i);
+                result += val * b_vals(col, j);
             }
+            c->at(row, j) = result;
         }
     }
 }
@@ -103,10 +104,12 @@ void advanced_spmv(std::shared_ptr<const ReferenceExecutor> exec,
                    const matrix::Dense<OutputValueType>* beta,
                    matrix::Dense<OutputValueType>* c)
 {
+    using arithmetic_type =
+        highest_precision<InputValueType, OutputValueType, MatrixValueType>;
     using a_accessor =
-        gko::acc::reduced_row_major<1, OutputValueType, const MatrixValueType>;
+        gko::acc::reduced_row_major<1, arithmetic_type, const MatrixValueType>;
     using b_accessor =
-        gko::acc::reduced_row_major<2, OutputValueType, const InputValueType>;
+        gko::acc::reduced_row_major<2, arithmetic_type, const InputValueType>;
 
     const auto num_stored_elements_per_row =
         a->get_num_stored_elements_per_row();
@@ -117,25 +120,66 @@ void advanced_spmv(std::shared_ptr<const ReferenceExecutor> exec,
     const auto b_vals = gko::acc::range<b_accessor>(
         std::array<size_type, 2>{{b->get_size()[0], b->get_size()[1]}},
         b->get_const_values(), std::array<size_type, 1>{{b->get_stride()}});
-    const auto alpha_val = OutputValueType(alpha->at(0, 0));
-    const auto beta_val = beta->at(0, 0);
+    const auto alpha_val = arithmetic_type{alpha->at(0, 0)};
+    const auto beta_val = arithmetic_type{beta->at(0, 0)};
 
-    for (size_type row = 0; row < a->get_size()[0]; row++) {
-        for (size_type j = 0; j < c->get_size()[1]; j++) {
-            c->at(row, j) *= beta_val;
-        }
-        for (size_type i = 0; i < num_stored_elements_per_row; i++) {
-            auto val = a_vals(row + i * stride);
-            auto col = a->col_at(row, i);
-            for (size_type j = 0; j < c->get_size()[1]; j++) {
-                c->at(row, j) += alpha_val * val * b_vals(col, j);
+    for (size_type j = 0; j < c->get_size()[1]; j++) {
+        for (size_type row = 0; row < a->get_size()[0]; row++) {
+            arithmetic_type result = c->at(row, j);
+            result *= beta_val;
+            for (size_type i = 0; i < num_stored_elements_per_row; i++) {
+                auto val = a_vals(row + i * stride);
+                auto col = a->col_at(row, i);
+                result += alpha_val * val * b_vals(col, j);
             }
+            c->at(row, j) = result;
         }
     }
 }
 
 GKO_INSTANTIATE_FOR_EACH_MIXED_VALUE_AND_INDEX_TYPE(
     GKO_DECLARE_ELL_ADVANCED_SPMV_KERNEL);
+
+
+template <typename IndexType>
+void compute_max_row_nnz(std::shared_ptr<const DefaultExecutor> exec,
+                         const Array<IndexType>& row_ptrs, size_type& max_nnz)
+{
+    max_nnz = 0;
+    const auto ptrs = row_ptrs.get_const_data();
+    for (size_type i = 1; i < row_ptrs.get_num_elems(); i++) {
+        max_nnz = std::max<size_type>(max_nnz, ptrs[i] - ptrs[i - 1]);
+    }
+}
+
+GKO_INSTANTIATE_FOR_EACH_INDEX_TYPE(GKO_DECLARE_ELL_COMPUTE_MAX_ROW_NNZ_KERNEL);
+
+
+template <typename ValueType, typename IndexType>
+void fill_in_matrix_data(
+    std::shared_ptr<const DefaultExecutor> exec,
+    const Array<matrix_data_entry<ValueType, IndexType>>& nonzeros,
+    const int64* row_ptrs, matrix::Ell<ValueType, IndexType>* output)
+{
+    for (size_type row = 0; row < output->get_size()[0]; row++) {
+        const auto row_begin = row_ptrs[row];
+        const auto row_end = row_ptrs[row + 1];
+        size_type col_idx = 0;
+        for (auto i = row_begin; i < row_end; i++) {
+            const auto entry = nonzeros.get_const_data()[i];
+            output->col_at(row, col_idx) = entry.column;
+            output->val_at(row, col_idx) = entry.value;
+            col_idx++;
+        }
+        for (; col_idx < output->get_num_stored_elements_per_row(); col_idx++) {
+            output->col_at(row, col_idx) = 0;
+            output->val_at(row, col_idx) = zero<ValueType>();
+        }
+    }
+}
+
+GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(
+    GKO_DECLARE_ELL_FILL_IN_MATRIX_DATA_KERNEL);
 
 
 template <typename ValueType, typename IndexType>

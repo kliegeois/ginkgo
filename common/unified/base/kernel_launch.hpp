@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -65,6 +65,16 @@ device_type<T> as_device_type(T value)
 }
 
 
+template <typename T>
+using unpack_member_type = typename detail::fake_complex_unpack_impl<T>::type;
+
+template <typename T>
+GKO_INLINE GKO_ATTRIBUTES constexpr unpack_member_type<T> unpack_member(T value)
+{
+    return fake_complex_unpack(value);
+}
+
+
 }  // namespace cuda
 }  // namespace kernels
 }  // namespace gko
@@ -89,6 +99,16 @@ template <typename T>
 device_type<T> as_device_type(T value)
 {
     return as_hip_type(value);
+}
+
+
+template <typename T>
+using unpack_member_type = typename detail::fake_complex_unpack_impl<T>::type;
+
+template <typename T>
+GKO_INLINE GKO_ATTRIBUTES constexpr unpack_member_type<T> unpack_member(T value)
+{
+    return fake_complex_unpack(value);
 }
 
 
@@ -117,6 +137,16 @@ device_type<T> as_device_type(T value)
     return value;
 }
 
+
+template <typename T>
+using unpack_member_type = T;
+
+template <typename T>
+GKO_INLINE GKO_ATTRIBUTES constexpr unpack_member_type<T> unpack_member(T value)
+{
+    return value;
+}
+
 }  // namespace dpcpp
 }  // namespace kernels
 }  // namespace gko
@@ -138,6 +168,16 @@ using device_type = T;
 
 template <typename T>
 device_type<T> as_device_type(T value)
+{
+    return value;
+}
+
+
+template <typename T>
+using unpack_member_type = T;
+
+template <typename T>
+GKO_INLINE GKO_ATTRIBUTES constexpr unpack_member_type<T> unpack_member(T value)
 {
     return value;
 }
@@ -170,14 +210,13 @@ namespace GKO_DEVICE_NAMESPACE {
 template <typename ValueType>
 struct matrix_accessor {
     ValueType* data;
-    size_type stride;
+    int64 stride;
 
     /**
      * @internal
      * Returns a reference to the element at position (row, col).
      */
-    GKO_INLINE GKO_ATTRIBUTES ValueType& operator()(size_type row,
-                                                    size_type col)
+    GKO_INLINE GKO_ATTRIBUTES ValueType& operator()(int64 row, int64 col)
     {
         return data[row * stride + col];
     }
@@ -187,7 +226,7 @@ struct matrix_accessor {
      * Returns a reference to the element at position idx in the underlying
      * storage.
      */
-    GKO_INLINE GKO_ATTRIBUTES ValueType& operator[](size_type idx)
+    GKO_INLINE GKO_ATTRIBUTES ValueType& operator[](int64 idx)
     {
         return data[idx];
     }
@@ -223,7 +262,8 @@ struct to_device_type_impl<matrix::Dense<ValueType>*&> {
     using type = matrix_accessor<device_type<ValueType>>;
     static type map_to_device(matrix::Dense<ValueType>* mtx)
     {
-        return {as_device_type(mtx->get_values()), mtx->get_stride()};
+        return {as_device_type(mtx->get_values()),
+                static_cast<int64>(mtx->get_stride())};
     }
 };
 
@@ -232,7 +272,8 @@ struct to_device_type_impl<const matrix::Dense<ValueType>*&> {
     using type = matrix_accessor<const device_type<ValueType>>;
     static type map_to_device(const matrix::Dense<ValueType>* mtx)
     {
-        return {as_device_type(mtx->get_const_values()), mtx->get_stride()};
+        return {as_device_type(mtx->get_const_values()),
+                static_cast<int64>(mtx->get_stride())};
     }
 };
 
@@ -267,8 +308,6 @@ typename to_device_type_impl<T>::type map_to_device(T&& param)
 }  // namespace gko
 
 
-// these files include this file again to make inclusion work from both sides,
-// this does not lead to issues due to the header guards.
 #if defined(GKO_COMPILING_CUDA)
 #include "cuda/base/kernel_launch.cuh"
 #elif defined(GKO_COMPILING_HIP)

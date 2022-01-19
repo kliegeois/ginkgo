@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -42,6 +42,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ginkgo/core/matrix/diagonal.hpp>
 
 
+#include "core/base/kernel_declaration.hpp"
+
+
 namespace gko {
 namespace kernels {
 
@@ -61,6 +64,17 @@ namespace kernels {
                        const matrix::Dense<InputValueType>* b,                \
                        const matrix::Dense<OutputValueType>* beta,            \
                        matrix::Dense<OutputValueType>* c)
+
+#define GKO_DECLARE_ELL_COMPUTE_MAX_ROW_NNZ_KERNEL(IndexType)             \
+    void compute_max_row_nnz(std::shared_ptr<const DefaultExecutor> exec, \
+                             const Array<IndexType>& row_ptrs,            \
+                             size_type& max_nnz)
+
+#define GKO_DECLARE_ELL_FILL_IN_MATRIX_DATA_KERNEL(ValueType, IndexType) \
+    void fill_in_matrix_data(                                            \
+        std::shared_ptr<const DefaultExecutor> exec,                     \
+        const Array<matrix_data_entry<ValueType, IndexType>>& data,      \
+        const int64* row_ptrs, matrix::Ell<ValueType, IndexType>* output)
 
 #define GKO_DECLARE_ELL_CONVERT_TO_DENSE_KERNEL(ValueType, IndexType)      \
     void convert_to_dense(std::shared_ptr<const DefaultExecutor> exec,     \
@@ -98,6 +112,10 @@ namespace kernels {
               typename OutputValueType, typename IndexType>                  \
     GKO_DECLARE_ELL_ADVANCED_SPMV_KERNEL(InputValueType, MatrixValueType,    \
                                          OutputValueType, IndexType);        \
+    template <typename IndexType>                                            \
+    GKO_DECLARE_ELL_COMPUTE_MAX_ROW_NNZ_KERNEL(IndexType);                   \
+    template <typename ValueType, typename IndexType>                        \
+    GKO_DECLARE_ELL_FILL_IN_MATRIX_DATA_KERNEL(ValueType, IndexType);        \
     template <typename ValueType, typename IndexType>                        \
     GKO_DECLARE_ELL_CONVERT_TO_DENSE_KERNEL(ValueType, IndexType);           \
     template <typename ValueType, typename IndexType>                        \
@@ -110,49 +128,7 @@ namespace kernels {
     GKO_DECLARE_ELL_EXTRACT_DIAGONAL_KERNEL(ValueType, IndexType)
 
 
-namespace omp {
-namespace ell {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace ell
-}  // namespace omp
-
-
-namespace cuda {
-namespace ell {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace ell
-}  // namespace cuda
-
-
-namespace reference {
-namespace ell {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace ell
-}  // namespace reference
-
-
-namespace hip {
-namespace ell {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace ell
-}  // namespace hip
-
-
-namespace dpcpp {
-namespace ell {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace ell
-}  // namespace dpcpp
+GKO_DECLARE_FOR_ALL_EXECUTOR_NAMESPACES(ell, GKO_DECLARE_ALL_AS_TEMPLATES);
 
 
 #undef GKO_DECLARE_ALL_AS_TEMPLATES

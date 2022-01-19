@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -89,8 +89,10 @@ public:
 
     using value_type = ValueType;
     using index_type = int64;
-    using mat_data = gko::matrix_data<ValueType, int64>;
-    using mat_data32 = gko::matrix_data<ValueType, int32>;
+    using mat_data = matrix_data<ValueType, int64>;
+    using mat_data32 = matrix_data<ValueType, int32>;
+    using device_mat_data = device_matrix_data<ValueType, int64>;
+    using device_mat_data32 = device_matrix_data<ValueType, int32>;
     using absolute_type = remove_complex<Diagonal>;
 
     friend class Diagonal<next_precision<ValueType>>;
@@ -154,10 +156,33 @@ public:
 
     void read(const mat_data32& data) override;
 
+    void read(const device_mat_data& data) override;
+
+    void read(const device_mat_data32& data) override;
+
     void write(mat_data& data) const override;
 
     void write(mat_data32& data) const override;
 
+    /**
+     * Creates a constant (immutable) Diagonal matrix from a constant array.
+     *
+     * @param exec  the executor to create the matrix on
+     * @param size  the size of the square matrix
+     * @param values  the value array of the matrix
+     * @returns A smart pointer to the constant matrix wrapping the input array
+     *          (if it resides on the same executor as the matrix) or a copy of
+     *          the array on the correct executor.
+     */
+    static std::unique_ptr<const Diagonal> create_const(
+        std::shared_ptr<const Executor> exec, size_type size,
+        gko::detail::ConstArrayView<ValueType>&& values)
+    {
+        // cast const-ness away, but return a const object afterwards,
+        // so we can ensure that no modifications take place.
+        return std::unique_ptr<const Diagonal>(new Diagonal{
+            exec, size, gko::detail::array_const_cast(std::move(values))});
+    }
 
 protected:
     /**

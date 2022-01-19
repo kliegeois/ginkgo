@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -45,6 +45,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ginkgo/core/matrix/sparsity_csr.hpp>
 
 
+#include "core/base/kernel_declaration.hpp"
+
+
 namespace gko {
 namespace kernels {
 
@@ -61,6 +64,13 @@ namespace kernels {
                        const matrix::Dense<ValueType>* b,            \
                        const matrix::Dense<ValueType>* beta,         \
                        matrix::Dense<ValueType>* c)
+
+#define GKO_DECLARE_FBCSR_FILL_IN_MATRIX_DATA_KERNEL(ValueType, IndexType) \
+    void fill_in_matrix_data(                                              \
+        std::shared_ptr<const DefaultExecutor> exec,                       \
+        const Array<matrix_data_entry<ValueType, IndexType>>& data,        \
+        int block_size, Array<IndexType>& row_ptrs,                        \
+        Array<IndexType>& col_idxs, Array<ValueType>& values)
 
 #define GKO_DECLARE_FBCSR_CONVERT_TO_DENSE_KERNEL(ValueType, IndexType)      \
     void convert_to_dense(std::shared_ptr<const DefaultExecutor> exec,       \
@@ -115,6 +125,8 @@ namespace kernels {
     template <typename ValueType, typename IndexType>                          \
     GKO_DECLARE_FBCSR_ADVANCED_SPMV_KERNEL(ValueType, IndexType);              \
     template <typename ValueType, typename IndexType>                          \
+    GKO_DECLARE_FBCSR_FILL_IN_MATRIX_DATA_KERNEL(ValueType, IndexType);        \
+    template <typename ValueType, typename IndexType>                          \
     GKO_DECLARE_FBCSR_CONVERT_TO_DENSE_KERNEL(ValueType, IndexType);           \
     template <typename ValueType, typename IndexType>                          \
     GKO_DECLARE_FBCSR_CONVERT_TO_CSR_KERNEL(ValueType, IndexType);             \
@@ -134,49 +146,7 @@ namespace kernels {
     GKO_DECLARE_FBCSR_EXTRACT_DIAGONAL(ValueType, IndexType)
 
 
-namespace omp {
-namespace fbcsr {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace fbcsr
-}  // namespace omp
-
-
-namespace cuda {
-namespace fbcsr {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace fbcsr
-}  // namespace cuda
-
-
-namespace reference {
-namespace fbcsr {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace fbcsr
-}  // namespace reference
-
-
-namespace hip {
-namespace fbcsr {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace fbcsr
-}  // namespace hip
-
-
-namespace dpcpp {
-namespace fbcsr {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace fbcsr
-}  // namespace dpcpp
+GKO_DECLARE_FOR_ALL_EXECUTOR_NAMESPACES(fbcsr, GKO_DECLARE_ALL_AS_TEMPLATES);
 
 
 #undef GKO_DECLARE_ALL_AS_TEMPLATES

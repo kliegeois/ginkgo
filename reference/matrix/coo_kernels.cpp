@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -128,6 +128,24 @@ void advanced_spmv2(std::shared_ptr<const ReferenceExecutor> exec,
 
 GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(
     GKO_DECLARE_COO_ADVANCED_SPMV2_KERNEL);
+
+
+template <typename ValueType, typename IndexType>
+void fill_in_matrix_data(
+    std::shared_ptr<const ReferenceExecutor> exec,
+    const Array<matrix_data_entry<ValueType, IndexType>>& nonzeros,
+    matrix::Coo<ValueType, IndexType>* output)
+{
+    for (size_type i = 0; i < nonzeros.get_num_elems(); i++) {
+        auto nonzero = nonzeros.get_const_data()[i];
+        output->get_row_idxs()[i] = nonzero.row;
+        output->get_col_idxs()[i] = nonzero.column;
+        output->get_values()[i] = nonzero.value;
+    }
+}
+
+GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(
+    GKO_DECLARE_COO_FILL_IN_MATRIX_DATA_KERNEL);
 
 
 template <typename IndexType>

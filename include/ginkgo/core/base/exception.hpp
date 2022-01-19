@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -174,6 +174,28 @@ public:
 
 
 /**
+ * MpiError is thrown when a MPI routine throws a non-zero error code.
+ */
+class MpiError : public Error {
+public:
+    /**
+     * Initializes a MPI error.
+     * @param file The name of the offending source file
+     * @param line The source code line number where the error occurred
+     * @param func The name of the MPI routine that failed
+     * @param error_code The resulting MPI error code
+     */
+    MpiError(const std::string& file, int line, const std::string& func,
+             int64 error_code)
+        : Error(file, line, func + ": " + get_error(error_code))
+    {}
+
+private:
+    static std::string get_error(int64 error_code);
+};
+
+
+/**
  * CudaError is thrown when a CUDA routine throws a non-zero error code.
  */
 class CudaError : public Error {
@@ -257,6 +279,29 @@ public:
      */
     CusparseError(const std::string& file, int line, const std::string& func,
                   int64 error_code)
+        : Error(file, line, func + ": " + get_error(error_code))
+    {}
+
+private:
+    static std::string get_error(int64 error_code);
+};
+
+
+/**
+ * CufftError is thrown when a cuFFT routine throws a non-zero error code.
+ */
+class CufftError : public Error {
+public:
+    /**
+     * Initializes a cuFFT error.
+     *
+     * @param file  The name of the offending source file
+     * @param line  The source code line number where the error occurred
+     * @param func  The name of the cuFFT routine that failed
+     * @param error_code  The resulting cuFFT error code
+     */
+    CufftError(const std::string& file, int line, const std::string& func,
+               int64 error_code)
         : Error(file, line, func + ": " + get_error(error_code))
     {}
 
@@ -350,6 +395,29 @@ public:
      */
     HipsparseError(const std::string& file, int line, const std::string& func,
                    int64 error_code)
+        : Error(file, line, func + ": " + get_error(error_code))
+    {}
+
+private:
+    static std::string get_error(int64 error_code);
+};
+
+
+/**
+ * HipfftError is thrown when a hipFFT routine throws a non-zero error code.
+ */
+class HipfftError : public Error {
+public:
+    /**
+     * Initializes a hipFFT error.
+     *
+     * @param file  The name of the offending source file
+     * @param line  The source code line number where the error occurred
+     * @param func  The name of the hipFFT routine that failed
+     * @param error_code  The resulting hipFFT error code
+     */
+    HipfftError(const std::string& file, int line, const std::string& func,
+                int64 error_code)
         : Error(file, line, func + ": " + get_error(error_code))
     {}
 

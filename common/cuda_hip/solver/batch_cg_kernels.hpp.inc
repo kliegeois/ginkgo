@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -54,9 +54,9 @@ __device__ __forceinline__ void initialize(
     __syncthreads();
 
     // r = b - A*x
-    single_advanced_spmv_kernel(static_cast<ValueType>(-1.0), A_global_entry,
-                                x_shared_entry, static_cast<ValueType>(1.0),
-                                r_shared_entry);
+    single_advanced_matvec_kernel(static_cast<ValueType>(-1.0), A_global_entry,
+                                  x_shared_entry, static_cast<ValueType>(1.0),
+                                  r_shared_entry);
     __syncthreads();
 
     // z = precond * r
@@ -122,17 +122,13 @@ template <typename StopType, typename PrecType, typename LogType,
 __global__ void apply_kernel(const int max_iter,
                              const gko::remove_complex<ValueType> tol,
                              LogType logger, PrecType prec_shared,
-                             const BatchMatrixType a, const size_type stride,
-                             const int nrhs,
+                             const BatchMatrixType a,
                              const ValueType* const __restrict__ b,
                              ValueType* const __restrict__ x)
 {
     using real_type = typename gko::remove_complex<ValueType>;
     const auto nbatch = a.num_batch;
     const auto nrows = a.num_rows;
-
-    // required for static allocation in stopping criterion
-    assert(batch_config<ValueType>::max_num_rhs >= nrhs);
 
     constexpr auto tile_size = config::warp_size;
     auto thread_block = group::this_thread_block();
@@ -141,11 +137,11 @@ __global__ void apply_kernel(const int max_iter,
     for (size_type ibatch = blockIdx.x; ibatch < nbatch; ibatch += gridDim.x) {
         extern __shared__ char local_mem_sh[];
         ValueType* const r_sh = reinterpret_cast<ValueType*>(local_mem_sh);
-        ValueType* const z_sh = r_sh + nrows * nrhs;
-        ValueType* const p_sh = z_sh + nrows * nrhs;
-        ValueType* const Ap_sh = p_sh + nrows * nrhs;
-        ValueType* const x_sh = Ap_sh + nrows * nrhs;
-        ValueType* const prec_work_sh = x_sh + nrows * nrhs;
+        ValueType* const z_sh = r_sh + nrows;
+        ValueType* const p_sh = z_sh + nrows;
+        ValueType* const Ap_sh = p_sh + nrows;
+        ValueType* const x_sh = Ap_sh + nrows;
+        ValueType* const prec_work_sh = x_sh + nrows;
         __shared__ UninitializedArray<ValueType, 1> rho_old_sh;
         __shared__ UninitializedArray<ValueType, 1> rho_new_sh;
         __shared__ UninitializedArray<ValueType, 1> alpha_sh;
@@ -186,7 +182,7 @@ __global__ void apply_kernel(const int max_iter,
             }
 
             // Ap = A * p
-            single_spmv_kernel(A_global_entry, p_sh, Ap_sh);
+            single_matvec_kernel(A_global_entry, p_sh, Ap_sh);
             __syncthreads();
 
             // alpha = rho_old / (p' * Ap)

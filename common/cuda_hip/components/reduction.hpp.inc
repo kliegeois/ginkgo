@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -208,18 +208,45 @@ __device__ void reduce_array(size_type size,
  *
  * Computes a reduction using the add operation (+) on an array
  * `source` of any size. Has to be called a second time on `result` to reduce
- * an array larger than `default_block_size`.
+ * an array larger than `default_reduce_block_size`.
  */
 template <typename ValueType>
-__global__ __launch_bounds__(default_block_size) void reduce_add_array(
+__global__ __launch_bounds__(default_reduce_block_size) void reduce_add_array(
     size_type size, const ValueType* __restrict__ source,
     ValueType* __restrict__ result)
 {
-    __shared__ UninitializedArray<ValueType, default_block_size> block_sum;
+    __shared__ UninitializedArray<ValueType, default_reduce_block_size>
+        block_sum;
     reduce_array(size, source, static_cast<ValueType*>(block_sum),
                  [](const ValueType& x, const ValueType& y) { return x + y; });
 
     if (threadIdx.x == 0) {
         result[blockIdx.x] = block_sum[0];
+    }
+}
+
+
+/**
+ * @internal
+ *
+ * Computes a reduction using the add operation (+) on an array
+ * `source` of any size. Has to be called a second time on `result` to reduce
+ * an array larger than `default_block_size`.
+ *
+ * @note uses existing value in result
+ */
+template <typename ValueType>
+__global__
+    __launch_bounds__(default_reduce_block_size) void reduce_add_array_with_initial_value(
+        size_type size, const ValueType* __restrict__ source,
+        ValueType* __restrict__ result)
+{
+    __shared__ UninitializedArray<ValueType, default_reduce_block_size>
+        block_sum;
+    reduce_array(size, source, static_cast<ValueType*>(block_sum),
+                 [](const ValueType& x, const ValueType& y) { return x + y; });
+
+    if (threadIdx.x == 0) {
+        result[blockIdx.x] += block_sum[0];
     }
 }

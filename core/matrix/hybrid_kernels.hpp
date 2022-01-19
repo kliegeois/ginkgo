@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -40,9 +40,24 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ginkgo/core/matrix/dense.hpp>
 
 
+#include "core/base/kernel_declaration.hpp"
+
+
 namespace gko {
 namespace kernels {
 
+
+#define GKO_DECLARE_HYBRID_COMPUTE_ROW_NNZ                            \
+    void compute_row_nnz(std::shared_ptr<const DefaultExecutor> exec, \
+                         const Array<int64>& row_ptrs, size_type* row_nnzs)
+
+#define GKO_DECLARE_HYBRID_SPLIT_MATRIX_DATA_KERNEL(ValueType, IndexType) \
+    void split_matrix_data(                                               \
+        std::shared_ptr<const DefaultExecutor> exec,                      \
+        const Array<matrix_data_entry<ValueType, IndexType>>& data,       \
+        const int64* row_ptrs, size_type num_rows, size_type ell_limit,   \
+        Array<matrix_data_entry<ValueType, IndexType>>& ell_data,         \
+        Array<matrix_data_entry<ValueType, IndexType>>& coo_data)
 
 #define GKO_DECLARE_HYBRID_CONVERT_TO_DENSE_KERNEL(ValueType, IndexType)      \
     void convert_to_dense(std::shared_ptr<const DefaultExecutor> exec,        \
@@ -59,58 +74,19 @@ namespace kernels {
                         const matrix::Hybrid<ValueType, IndexType>* source, \
                         size_type* result)
 
-#define GKO_DECLARE_ALL_AS_TEMPLATES                                  \
-    template <typename ValueType, typename IndexType>                 \
-    GKO_DECLARE_HYBRID_CONVERT_TO_DENSE_KERNEL(ValueType, IndexType); \
-    template <typename ValueType, typename IndexType>                 \
-    GKO_DECLARE_HYBRID_CONVERT_TO_CSR_KERNEL(ValueType, IndexType);   \
-    template <typename ValueType, typename IndexType>                 \
+#define GKO_DECLARE_ALL_AS_TEMPLATES                                   \
+    GKO_DECLARE_HYBRID_COMPUTE_ROW_NNZ;                                \
+    template <typename ValueType, typename IndexType>                  \
+    GKO_DECLARE_HYBRID_SPLIT_MATRIX_DATA_KERNEL(ValueType, IndexType); \
+    template <typename ValueType, typename IndexType>                  \
+    GKO_DECLARE_HYBRID_CONVERT_TO_DENSE_KERNEL(ValueType, IndexType);  \
+    template <typename ValueType, typename IndexType>                  \
+    GKO_DECLARE_HYBRID_CONVERT_TO_CSR_KERNEL(ValueType, IndexType);    \
+    template <typename ValueType, typename IndexType>                  \
     GKO_DECLARE_HYBRID_COUNT_NONZEROS_KERNEL(ValueType, IndexType)
 
 
-namespace omp {
-namespace hybrid {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace hybrid
-}  // namespace omp
-
-
-namespace cuda {
-namespace hybrid {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace hybrid
-}  // namespace cuda
-
-
-namespace reference {
-namespace hybrid {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace hybrid
-}  // namespace reference
-
-
-namespace hip {
-namespace hybrid {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace hybrid
-}  // namespace hip
-
-
-namespace dpcpp {
-namespace hybrid {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace hybrid
-}  // namespace dpcpp
+GKO_DECLARE_FOR_ALL_EXECUTOR_NAMESPACES(hybrid, GKO_DECLARE_ALL_AS_TEMPLATES);
 
 
 #undef GKO_DECLARE_ALL_AS_TEMPLATES

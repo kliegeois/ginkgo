@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -48,6 +48,29 @@ namespace GKO_DEVICE_NAMESPACE {
  * @ingroup coo
  */
 namespace coo {
+
+
+template <typename ValueType, typename IndexType>
+void fill_in_matrix_data(
+    std::shared_ptr<const DefaultExecutor> exec,
+    const Array<matrix_data_entry<ValueType, IndexType>>& nonzeros,
+    matrix::Coo<ValueType, IndexType>* output)
+{
+    run_kernel(
+        exec,
+        [] GKO_KERNEL(auto i, auto nonzeros, auto rows, auto cols,
+                      auto values) {
+            auto nonzero = nonzeros[i];
+            rows[i] = nonzero.row;
+            cols[i] = nonzero.column;
+            values[i] = unpack_member(nonzero.value);
+        },
+        nonzeros.get_num_elems(), nonzeros, output->get_row_idxs(),
+        output->get_col_idxs(), output->get_values());
+}
+
+GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(
+    GKO_DECLARE_COO_FILL_IN_MATRIX_DATA_KERNEL);
 
 
 template <typename ValueType, typename IndexType>

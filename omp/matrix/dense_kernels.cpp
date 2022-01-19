@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -51,7 +51,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ginkgo/core/matrix/sparsity_csr.hpp>
 
 
-#include "core/components/prefix_sum.hpp"
+#include "core/components/prefix_sum_kernels.hpp"
 
 
 namespace gko {
@@ -125,73 +125,6 @@ void apply(std::shared_ptr<const OmpExecutor> exec,
 }
 
 GKO_INSTANTIATE_FOR_EACH_VALUE_TYPE(GKO_DECLARE_DENSE_APPLY_KERNEL);
-
-
-template <typename ValueType>
-void compute_dot(std::shared_ptr<const OmpExecutor> exec,
-                 const matrix::Dense<ValueType>* x,
-                 const matrix::Dense<ValueType>* y,
-                 matrix::Dense<ValueType>* result)
-{
-#pragma omp parallel for
-    for (size_type j = 0; j < x->get_size()[1]; ++j) {
-        result->at(0, j) = zero<ValueType>();
-    }
-#pragma omp parallel for
-    for (size_type j = 0; j < x->get_size()[1]; ++j) {
-        for (size_type i = 0; i < x->get_size()[0]; ++i) {
-            result->at(0, j) += x->at(i, j) * y->at(i, j);
-        }
-    }
-}
-
-GKO_INSTANTIATE_FOR_EACH_VALUE_TYPE(GKO_DECLARE_DENSE_COMPUTE_DOT_KERNEL);
-
-
-template <typename ValueType>
-void compute_conj_dot(std::shared_ptr<const OmpExecutor> exec,
-                      const matrix::Dense<ValueType>* x,
-                      const matrix::Dense<ValueType>* y,
-                      matrix::Dense<ValueType>* result)
-{
-#pragma omp parallel for
-    for (size_type j = 0; j < x->get_size()[1]; ++j) {
-        result->at(0, j) = zero<ValueType>();
-    }
-#pragma omp parallel for
-    for (size_type j = 0; j < x->get_size()[1]; ++j) {
-        for (size_type i = 0; i < x->get_size()[0]; ++i) {
-            result->at(0, j) += conj(x->at(i, j)) * y->at(i, j);
-        }
-    }
-}
-
-GKO_INSTANTIATE_FOR_EACH_VALUE_TYPE(GKO_DECLARE_DENSE_COMPUTE_CONJ_DOT_KERNEL);
-
-
-template <typename ValueType>
-void compute_norm2(std::shared_ptr<const OmpExecutor> exec,
-                   const matrix::Dense<ValueType>* x,
-                   matrix::Dense<remove_complex<ValueType>>* result)
-{
-    using norm_type = remove_complex<ValueType>;
-#pragma omp parallel for
-    for (size_type j = 0; j < x->get_size()[1]; ++j) {
-        result->at(0, j) = zero<norm_type>();
-    }
-#pragma omp parallel for
-    for (size_type j = 0; j < x->get_size()[1]; ++j) {
-        for (size_type i = 0; i < x->get_size()[0]; ++i) {
-            result->at(0, j) += squared_norm(x->at(i, j));
-        }
-    }
-#pragma omp parallel for
-    for (size_type j = 0; j < x->get_size()[1]; ++j) {
-        result->at(0, j) = sqrt(result->at(0, j));
-    }
-}
-
-GKO_INSTANTIATE_FOR_EACH_VALUE_TYPE(GKO_DECLARE_DENSE_COMPUTE_NORM2_KERNEL);
 
 
 template <typename ValueType, typename IndexType>

@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -63,6 +63,93 @@ namespace detail {
 template <typename SourceType, typename TargetType>
 void convert_data(std::shared_ptr<const Executor> exec, size_type size,
                   const SourceType* src, TargetType* dst);
+
+
+/**
+ * @internal
+ *
+ * Array-like non-owning wrapper for const data, to be used in conjunction with
+ * `array_const_cast` and `create_const` to create matrix type wrappers from
+ * constant data.
+ *
+ * @tparam ValueType  the type of elements stored in the array view.
+ */
+template <typename ValueType>
+class ConstArrayView {
+public:
+    /**
+     * The type of elements stored in the array view.
+     */
+    using value_type = ValueType;
+
+    /**
+     * Constructs an array view from existing data.
+     *
+     * @param exec  the executor in whose memory space the data resides.
+     * @param num_elems  the number of elements in this array view.
+     * @param data  a pointer to the first element of this array view.
+     */
+    ConstArrayView(std::shared_ptr<const Executor> exec, size_type num_elems,
+                   const ValueType* data)
+        : exec_{std::move(exec)}, num_elems_{num_elems}, data_{data}
+    {}
+
+    /*
+     * To avoid any collisions with the value semantics of normal arrays,
+     * disable assignment and copy-construction altogether.
+     */
+    ConstArrayView& operator=(const ConstArrayView&) = delete;
+    ConstArrayView& operator=(ConstArrayView&&) = delete;
+    ConstArrayView(const ConstArrayView&) = delete;
+    /*
+     * TODO C++17: delete this overload as well, it is no longer necessary due
+     * to guaranteed RVO.
+     */
+    ConstArrayView(ConstArrayView&& other)
+        : ConstArrayView{other.exec_, other.num_elems_, other.data_}
+    {
+        other.num_elems_ = 0;
+        other.data_ = nullptr;
+    }
+
+    /**
+     * Returns the number of elements in the array view.
+     *
+     * @return the number of elements in the array view
+     */
+    size_type get_num_elems() const noexcept { return num_elems_; }
+
+    /**
+     * Returns a constant pointer to the first element of this array view.
+     *
+     * @return a constant pointer to the first element of this array view.
+     */
+    const value_type* get_const_data() const noexcept { return data_; }
+
+    /**
+     * Returns the Executor associated with the array view.
+     *
+     * @return the Executor associated with the array view
+     */
+    std::shared_ptr<const Executor> get_executor() const noexcept
+    {
+        return exec_;
+    }
+
+    /**
+     * Returns false, to be consistent with the Array interface.
+     */
+    bool is_owning() const noexcept { return false; }
+
+private:
+    std::shared_ptr<const Executor> exec_;
+    size_type num_elems_;
+    const ValueType* data_;
+};
+
+
+template <typename ValueType>
+Array<ValueType> array_const_cast(ConstArrayView<ValueType> view);
 
 
 }  // namespace detail
@@ -289,6 +376,46 @@ public:
     }
 
     /**
+     * Creates a constant (immutable) Array from existing memory.
+     *
+     * The Array does not take ownership of the memory, and will not deallocate
+     * it once it goes out of scope. This array type cannot use the function
+     * `resize_and_reset` since it does not own the data it should resize.
+     *
+     * @param exec  executor where `data` is located
+     * @param num_elems  number of elements in `data`
+     * @param data  chunk of memory used to create the array
+     *
+     * @return an Array constructed from `data`
+     */
+    static detail::ConstArrayView<ValueType> const_view(
+        std::shared_ptr<const Executor> exec, size_type num_elems,
+        const value_type* data)
+    {
+        return {exec, num_elems, data};
+    }
+
+    /**
+     * Returns a non-owning view of the memory owned by this array.
+     * It can only be used until this array gets deleted, cleared or resized.
+     */
+    Array<ValueType> as_view()
+    {
+        return view(this->get_executor(), this->get_num_elems(),
+                    this->get_data());
+    }
+
+    /**
+     * Returns a non-owning constant view of the memory owned by this array.
+     * It can only be used until this array gets deleted, cleared or resized.
+     */
+    detail::ConstArrayView<ValueType> as_const_view() const
+    {
+        return const_view(this->get_executor(), this->get_num_elems(),
+                          this->get_const_data());
+    }
+
+    /**
      * Copies data from another array or view. In the case of an array target,
      * the array is resized to match the source's size. In the case of a view
      * target, if the dimensions are not compatible a gko::OutOfBoundsError is
@@ -484,7 +611,7 @@ public:
      *
      * @param value the value to be filled
      */
-    void fill(const ValueType value);
+    void fill(const value_type value);
 
     /**
      * Returns the number of elements in the Array.
@@ -570,6 +697,53 @@ private:
 };
 
 
+/**
+ * Reduce (sum) the values in the array
+ *
+ * @tparam The type of the input data
+ *
+ * @param [in] input_arr the input array to be reduced
+ * @param [in] init_val the initial value
+ *
+ * @return the reduced value
+ */
+template <typename ValueType>
+ValueType reduce_add(const Array<ValueType>& input_arr,
+                     const ValueType init_val = 0);
+
+/**
+ * Reduce (sum) the values in the array
+ *
+ * @tparam The type of the input data
+ *
+ * @param [in] input_arr the input array to be reduced
+ * @param [out,in] result the reduced value. The result is written into the
+ *                 first entry and the value in the first entry is used as the
+ *                 initial value for the reduce.
+ */
+template <typename ValueType>
+void reduce_add(const Array<ValueType>& input_arr, Array<ValueType>& result);
+
+
+/**
+ * Helper function to create an array view deducing the value type.
+ *
+ * @param exec  the executor on which the array resides
+ * @param size  the number of elements for the array
+ * @param data  the pointer to the array we create a view on.
+ *
+ * @tparam ValueType  the type of the array elements
+ *
+ * @return `Array<ValueType>::view(exec, size, data)`
+ */
+template <typename ValueType>
+Array<ValueType> make_array_view(std::shared_ptr<const Executor> exec,
+                                 size_type size, ValueType* data)
+{
+    return Array<ValueType>::view(exec, size, data);
+}
+
+
 namespace detail {
 
 
@@ -625,6 +799,27 @@ public:
 private:
     pointer original_;
 };
+
+
+/**
+ * @internal
+ *
+ * Casts away const-ness from a array view to get a Array representing the same
+ * data. This needs to be used carefully, as the class this array gets passed to
+ * must not modify its data. That is usually achieved by creating a `const`
+ * instance of the class.
+ *
+ * @param view  the array view to be cast.
+ * @returns a non-const non-owning array wrapping the same pointer on the same
+ *          executor as `view`.
+ */
+template <typename ValueType>
+Array<ValueType> array_const_cast(ConstArrayView<ValueType> view)
+{
+    return Array<ValueType>::view(
+        view.get_executor(), view.get_num_elems(),
+        const_cast<ValueType*>(view.get_const_data()));
+}
 
 
 }  // namespace detail

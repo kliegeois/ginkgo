@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -92,6 +92,7 @@ public:
     using value_type = ValueType;
     using index_type = IndexType;
     using mat_data = matrix_data<ValueType, IndexType>;
+    using device_mat_data = device_matrix_data<ValueType, IndexType>;
     using absolute_type = remove_complex<Ell>;
 
     friend class Ell<next_precision<ValueType>, IndexType>;
@@ -110,6 +111,8 @@ public:
     void move_to(Csr<ValueType, IndexType>* other) override;
 
     void read(const mat_data& data) override;
+
+    void read(const device_mat_data& data) override;
 
     void write(mat_data& data) const override;
 
@@ -230,6 +233,33 @@ public:
         return this->get_const_col_idxs()[this->linearize_index(row, idx)];
     }
 
+    /**
+     * Creates a constant (immutable) Ell matrix from a set of constant arrays.
+     *
+     * @param exec  the executor to create the matrix on
+     * @param size  the dimensions of the matrix
+     * @param values  the value array of the matrix
+     * @param col_idxs  the column index array of the matrix
+     * @param num_stored_elements_per_row  the number of stored nonzeros per row
+     * @param stride  the column-stride of the value and column index array
+     * @returns A smart pointer to the constant matrix wrapping the input arrays
+     *          (if they reside on the same executor as the matrix) or a copy of
+     *          the arrays on the correct executor.
+     */
+    static std::unique_ptr<const Ell> create_const(
+        std::shared_ptr<const Executor> exec, const dim<2>& size,
+        gko::detail::ConstArrayView<ValueType>&& values,
+        gko::detail::ConstArrayView<IndexType>&& col_idxs,
+        size_type num_stored_elements_per_row, size_type stride)
+    {
+        // cast const-ness away, but return a const object afterwards,
+        // so we can ensure that no modifications take place.
+        return std::unique_ptr<const Ell>(new Ell{
+            exec, size, gko::detail::array_const_cast(std::move(values)),
+            gko::detail::array_const_cast(std::move(col_idxs)),
+            num_stored_elements_per_row, stride});
+    }
+
 protected:
     /**
      * Creates an uninitialized Ell matrix of the specified size.
@@ -332,6 +362,26 @@ private:
 
 
 }  // namespace matrix
+
+
+/**
+ * Generates a single large block-diagonal ELL matrix from the given ELL
+ * matrices.
+ *
+ * @param exec  Executor on which both the input and output reside
+ * @param matrices  List of matrices to be concatenated in to one
+ *   block-diagonal matrix.
+ *
+ * @warning Not for use in performance-critical code! The operation currently
+ *   happens on the host and copies are performed.
+ */
+template <typename ValueType, typename IndexType>
+std::unique_ptr<matrix::Ell<ValueType, IndexType>> create_block_diagonal_matrix(
+    std::shared_ptr<const Executor> exec,
+    const std::vector<std::unique_ptr<matrix::Ell<ValueType, IndexType>>>&
+        matrices);
+
+
 }  // namespace gko
 
 

@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -39,6 +39,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ginkgo/core/base/exception.hpp>
 #include <ginkgo/core/base/executor.hpp>
 #include <ginkgo/core/log/batch_convergence.hpp>
+#include <ginkgo/core/matrix/batch_ell.hpp>
 
 
 #include "core/matrix/batch_csr_kernels.hpp"
@@ -102,7 +103,7 @@ protected:
     const int nrows = 3;
     const Options opts_1{gko::preconditioner::batch::type::none, 500,
                          static_cast<real_type>(1e3) * eps,
-                         gko::stop::batch::ToleranceType::relative, 10};
+                         gko::stop::batch::ToleranceType::relative};
     gko::test::LinSys<T> sys_1;
 
     std::function<void(Options, const Mtx*, const BDense*, BDense*, LogData&)>
@@ -136,17 +137,27 @@ protected:
 TYPED_TEST_SUITE(BatchBicgstab, gko::test::ValueTypes);
 
 
-TYPED_TEST(BatchBicgstab, SolvesStencilSystem)
+TYPED_TEST(BatchBicgstab, SolveIsEquivalentToReference)
 {
-    auto r_1 = gko::test::solve_poisson_uniform(
-        this->cuexec, this->solve_fn, this->scale_mat, this->scale_vecs,
-        this->opts_1, this->sys_1, 1);
+    using value_type = typename TestFixture::value_type;
+    using solver_type = gko::solver::BatchBicgstab<value_type>;
+    using opts_type = typename TestFixture::Options;
+    using mtx_type = typename TestFixture::Mtx;
+    constexpr bool issingle =
+        std::is_same<gko::remove_complex<value_type>, float>::value;
+    const float solver_restol = issingle ? 50 * this->eps : this->eps;
+    const opts_type opts{gko::preconditioner::batch::type::none, 500,
+                         solver_restol,
+                         gko::stop::batch::ToleranceType::relative};
+    auto r_sys = gko::test::generate_solvable_batch_system<mtx_type>(
+        this->exec, this->nbatch, 11, 1, false);
+    auto r_factory = this->create_factory(this->exec, opts);
+    const double iter_tol = 0.01;
+    const double res_tol = 10 * r<value_type>::value;
+    const double sol_tol = 10 * solver_restol;
 
-    GKO_ASSERT_BATCH_MTX_NEAR(r_1.x, this->sys_1.xex, this->eps);
-    for (size_t ib = 0; ib < this->nbatch; ib++) {
-        ASSERT_LE(r_1.resnorm->at(ib, 0, 0) / this->sys_1.bnorm->at(ib, 0, 0),
-                  this->opts_1.residual_tol);
-    }
+    gko::test::compare_with_reference<value_type, solver_type>(
+        this->cuexec, r_sys, r_factory.get(), iter_tol, res_tol, sol_tol);
 }
 
 
@@ -273,11 +284,12 @@ TEST(BatchBicgstab, GoodScalingImprovesConvergence)
 }
 
 
-TEST(BatchBicgstab, CanSolveWithoutScaling)
+TEST(BatchBicgstab, CanSolveCsrWithoutScaling)
 {
     using T = std::complex<float>;
     using RT = typename gko::remove_complex<T>;
     using Solver = gko::solver::BatchBicgstab<T>;
+    using Csr = gko::matrix::BatchCsr<T>;
     const RT tol = 1e-5;
     std::shared_ptr<gko::ReferenceExecutor> refexec =
         gko::ReferenceExecutor::create();
@@ -295,8 +307,95 @@ TEST(BatchBicgstab, CanSolveWithoutScaling)
     const size_t nbatch = 3;
     const int nrhs = 1;
 
-    gko::test::test_solve<Solver>(exec, nbatch, nrows, nrhs, tol, maxits,
-                                  batchbicgstab_factory.get(), 5);
+    gko::test::test_solve<Solver, Csr>(exec, nbatch, nrows, nrhs, tol, maxits,
+                                       batchbicgstab_factory.get(), 5);
+}
+
+
+TEST(BatchBicgstab, SolvesLargeCsrSystemEquivalentToReference)
+{
+    using value_type = double;
+    using real_type = double;
+    using mtx_type = gko::matrix::BatchCsr<value_type, int>;
+    using solver_type = gko::solver::BatchBicgstab<value_type>;
+    std::shared_ptr<gko::ReferenceExecutor> refexec =
+        gko::ReferenceExecutor::create();
+    std::shared_ptr<const gko::CudaExecutor> d_exec =
+        gko::CudaExecutor::create(0, refexec);
+    const float solver_restol = 1e-4;
+    auto r_sys = gko::test::generate_solvable_batch_system<mtx_type>(
+        refexec, 2, 990, 1, false);
+    auto r_factory =
+        solver_type::build()
+            .with_max_iterations(500)
+            .with_residual_tol(solver_restol)
+            .with_tolerance_type(gko::stop::batch::ToleranceType::relative)
+            .with_preconditioner(gko::preconditioner::batch::type::jacobi)
+            .on(refexec);
+    const double iter_tol = 0.01;
+    const double res_tol = 1e-9;
+    const double sol_tol = 10 * solver_restol;
+
+    gko::test::compare_with_reference<value_type, solver_type>(
+        d_exec, r_sys, r_factory.get(), iter_tol, res_tol, sol_tol);
+}
+
+
+TEST(BatchBicgstab, SolvesLargeDenseSystemEquivalentToReference)
+{
+    using value_type = double;
+    using real_type = double;
+    using mtx_type = gko::matrix::BatchDense<value_type>;
+    using solver_type = gko::solver::BatchBicgstab<value_type>;
+    std::shared_ptr<gko::ReferenceExecutor> refexec =
+        gko::ReferenceExecutor::create();
+    std::shared_ptr<const gko::CudaExecutor> d_exec =
+        gko::CudaExecutor::create(0, refexec);
+    const float solver_restol = 1e-4;
+    auto r_sys = gko::test::generate_solvable_batch_system<mtx_type>(
+        refexec, 2, 33, 1, false);
+    auto r_factory =
+        solver_type::build()
+            .with_max_iterations(500)
+            .with_residual_tol(solver_restol)
+            .with_tolerance_type(gko::stop::batch::ToleranceType::relative)
+            .with_preconditioner(gko::preconditioner::batch::type::jacobi)
+            .on(refexec);
+    const double iter_tol = 0.01;
+    const double res_tol = 1e-9;
+    const double sol_tol = 10 * solver_restol;
+
+    gko::test::compare_with_reference<value_type, solver_type>(
+        d_exec, r_sys, r_factory.get(), iter_tol, res_tol, sol_tol);
+}
+
+
+TEST(BatchBicgstab, SolvesLargeEllSystemEquivalentToReference)
+{
+    using value_type = double;
+    using real_type = double;
+    using mtx_type = gko::matrix::BatchEll<value_type, int>;
+    using solver_type = gko::solver::BatchBicgstab<value_type>;
+    std::shared_ptr<gko::ReferenceExecutor> refexec =
+        gko::ReferenceExecutor::create();
+    std::shared_ptr<const gko::CudaExecutor> d_exec =
+        gko::CudaExecutor::create(0, refexec);
+    const float solver_restol = 1e-4;
+    auto r_sys = gko::test::generate_solvable_batch_system<mtx_type>(
+        refexec, 2, 91, 1, false);
+    auto r_factory =
+        solver_type::build()
+            .with_max_iterations(500)
+            .with_residual_tol(solver_restol)
+            .with_tolerance_type(gko::stop::batch::ToleranceType::relative)
+            .with_preconditioner(gko::preconditioner::batch::type::jacobi)
+            .on(refexec);
+    const double iter_tol = 0.01;
+    const double res_tol = 1e-9;
+    const double sol_tol = 10 * solver_restol;
+
+    gko::test::compare_with_reference<value_type, solver_type>(
+        d_exec, r_sys, r_factory.get(), iter_tol, res_tol, sol_tol);
 }
 
 }  // namespace

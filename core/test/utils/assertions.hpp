@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -361,10 +361,9 @@ template <typename MatrixData1, typename MatrixData2>
             auto firstfile = testname + "." + first_expression + ".mtx";
             auto secondfile = testname + "." + second_expression + ".mtx";
             auto to_remove = [](char c) {
-                return !std::isalnum(c) && c != '_' && c != '.' && c != '-' &&
-                       c != '<' && c != '>';
+                return !std::isalnum(c) && c != '_' && c != '.' && c != '-';
             };
-            // remove all but alphanumerical and _.-<> characters from
+            // remove all but alphanumerical and _.- characters from
             // expressions
             firstfile.erase(
                 std::remove_if(firstfile.begin(), firstfile.end(), to_remove),

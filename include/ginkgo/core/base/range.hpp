@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -106,11 +106,7 @@ struct span {
      *
      * @return `this->end - this->begin`
      */
-    GKO_ATTRIBUTES constexpr size_type length() const
-    {
-        GKO_ASSERT(is_valid());
-        return end - begin;
-    }
+    GKO_ATTRIBUTES constexpr size_type length() const { return end - begin; }
 
     /**
      * Beginning of the span.

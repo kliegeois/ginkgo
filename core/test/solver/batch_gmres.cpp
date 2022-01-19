@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -58,7 +58,7 @@ protected:
 
     BatchGmres()
         : exec(gko::ReferenceExecutor::create()),
-          mtx(gko::test::create_poisson1d_batch<value_type>(
+          mtx(gko::test::create_poisson1d_batch<Mtx>(
               std::static_pointer_cast<const gko::ReferenceExecutor>(
                   this->exec),
               nrows, nbatch)),

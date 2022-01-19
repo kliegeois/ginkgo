@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -107,7 +107,7 @@ protected:
     }
 };
 
-TYPED_TEST_SUITE(Coo, gko::test::ValueIndexTypes);
+TYPED_TEST_SUITE(Coo, gko::test::ValueIndexTypes, PairTypenameNameGenerator);
 
 
 TYPED_TEST(Coo, KnowsItsSize)
@@ -145,6 +145,26 @@ TYPED_TEST(Coo, CanBeCreatedFromExistingData)
         gko::Array<value_type>::view(this->exec, 4, values),
         gko::Array<index_type>::view(this->exec, 4, col_idxs),
         gko::Array<index_type>::view(this->exec, 4, row_idxs));
+
+    ASSERT_EQ(mtx->get_const_values(), values);
+    ASSERT_EQ(mtx->get_const_col_idxs(), col_idxs);
+    ASSERT_EQ(mtx->get_const_row_idxs(), row_idxs);
+}
+
+
+TYPED_TEST(Coo, CanBeCreatedFromExistingConstData)
+{
+    using value_type = typename TestFixture::value_type;
+    using index_type = typename TestFixture::index_type;
+    const value_type values[] = {1.0, 2.0, 3.0, 4.0};
+    const index_type col_idxs[] = {0, 1, 1, 0};
+    const index_type row_idxs[] = {0, 0, 1, 2};
+
+    auto mtx = gko::matrix::Coo<value_type, index_type>::create_const(
+        this->exec, gko::dim<2>{3, 2},
+        gko::Array<value_type>::const_view(this->exec, 4, values),
+        gko::Array<index_type>::const_view(this->exec, 4, col_idxs),
+        gko::Array<index_type>::const_view(this->exec, 4, row_idxs));
 
     ASSERT_EQ(mtx->get_const_values(), values);
     ASSERT_EQ(mtx->get_const_col_idxs(), col_idxs);
@@ -199,13 +219,7 @@ TYPED_TEST(Coo, CanBeReadFromMatrixData)
 {
     using Mtx = typename TestFixture::Mtx;
     auto m = Mtx::create(this->exec);
-    m->read({{2, 3},
-             {{0, 0, 1.0},
-              {0, 1, 3.0},
-              {0, 2, 2.0},
-              {1, 0, 0.0},
-              {1, 1, 5.0},
-              {1, 2, 0.0}}});
+    m->read({{2, 3}, {{0, 0, 1.0}, {0, 1, 3.0}, {0, 2, 2.0}, {1, 1, 5.0}}});
 
     this->assert_equal_to_original_mtx(m.get());
 }
@@ -221,9 +235,7 @@ TYPED_TEST(Coo, CanBeReadFromMatrixAssemblyData)
     data.set_value(0, 0, 1.0);
     data.set_value(0, 1, 3.0);
     data.set_value(0, 2, 2.0);
-    data.set_value(1, 0, 0.0);
     data.set_value(1, 1, 5.0);
-    data.set_value(1, 2, 0.0);
 
     m->read(data);
 

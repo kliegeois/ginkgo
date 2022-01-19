@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -76,6 +76,17 @@ void advanced_spmv(std::shared_ptr<const DpcppExecutor> exec,
 
 GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(
     GKO_DECLARE_FBCSR_ADVANCED_SPMV_KERNEL);
+
+
+template <typename ValueType, typename IndexType>
+void fill_in_matrix_data(
+    std::shared_ptr<const DefaultExecutor> exec,
+    const Array<matrix_data_entry<ValueType, IndexType>>& data, int block_size,
+    Array<IndexType>& row_ptrs, Array<IndexType>& col_idxs,
+    Array<ValueType>& values) GKO_NOT_IMPLEMENTED;
+
+GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(
+    GKO_DECLARE_FBCSR_FILL_IN_MATRIX_DATA_KERNEL);
 
 
 template <typename IndexType>

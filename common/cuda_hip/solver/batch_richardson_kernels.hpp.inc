@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -55,26 +55,10 @@ __global__ void apply_kernel(const int max_iter,
     auto warp_grp = group::tiled_partition<tile_size>(thread_block);
 
     for (size_type ibatch = blockIdx.x; ibatch < nbatch; ibatch += gridDim.x) {
-#if GKO_CUDA_BATCH_USE_DYNAMIC_SHARED_MEM
         extern __shared__ char local_mem[];
         const auto residual = reinterpret_cast<ValueType*>(local_mem);
         ValueType* const delta_x = residual + num_rows * num_rhs;
         ValueType* const prec_work = residual + 2 * num_rows * num_rhs;
-#else
-        constexpr int max_nrhs = batch_config<ValueType>::max_num_rhs;
-        constexpr int max_nrows = batch_config<ValueType>::max_num_rows;
-        if (max_nrows * max_nrhs < num_rows * num_rhs) {
-            if (blockIdx.x == 0 && threadIdx.x == 0) {
-                printf(" Static vector size not enough!\n");
-            }
-            return;
-        }
-        __shared__ ValueType residual[max_nrows * max_nrhs];
-        __shared__ ValueType delta_x[max_nrows * max_nrhs];
-        __shared__ ValueType prec_work[PrecType::work_size];
-        __shared__ real_type norms[max_nrhs];
-        __shared__ real_type init_res_norm[max_nrhs];
-#endif
         __shared__ real_type norms[1];
         __shared__ real_type init_res_norm[1];
 
@@ -104,8 +88,9 @@ __global__ void apply_kernel(const int max_iter,
             // r <- b - Ax
             single_copy(num_rows, b_b, residual);
             __syncthreads();
-            single_advanced_spmv_kernel(static_cast<ValueType>(-1.0), a_b, x_b,
-                                        static_cast<ValueType>(1.0), residual);
+            single_advanced_matvec_kernel(static_cast<ValueType>(-1.0), a_b,
+                                          x_b, static_cast<ValueType>(1.0),
+                                          residual);
             __syncthreads();
 
             if (threadIdx.x / config::warp_size == 0) {

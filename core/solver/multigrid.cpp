@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -48,7 +48,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ginkgo/core/stop/iteration.hpp>
 
 
-#include "core/components/fill_array.hpp"
+#include "core/components/fill_array_kernels.hpp"
 #include "core/solver/ir_kernels.hpp"
 #include "core/solver/multigrid_kernels.hpp"
 
@@ -123,7 +123,7 @@ void run(T obj, func f, Args... args)
 template <typename ValueType, typename T>
 std::enable_if_t<is_complex_s<ValueType>::value == is_complex_s<T>::value,
                  ValueType>
-casting(const T &x)
+casting(const T& x)
 {
     return static_cast<ValueType>(x);
 }
@@ -134,7 +134,7 @@ casting(const T &x)
 template <typename ValueType, typename T>
 std::enable_if_t<!is_complex_s<ValueType>::value && is_complex_s<T>::value,
                  ValueType>
-casting(const T &x)
+casting(const T& x)
 {
     return static_cast<ValueType>(real(x));
 }
@@ -167,9 +167,9 @@ auto as_real_vec(std::shared_ptr<LinOp> x)
  */
 template <typename ValueType>
 void handle_list(
-    size_type index, std::shared_ptr<const LinOp> &matrix,
-    std::vector<std::shared_ptr<const LinOpFactory>> &smoother_list,
-    std::vector<std::shared_ptr<const LinOp>> &smoother, size_type iteration,
+    size_type index, std::shared_ptr<const LinOp>& matrix,
+    std::vector<std::shared_ptr<const LinOpFactory>>& smoother_list,
+    std::vector<std::shared_ptr<const LinOp>>& smoother, size_type iteration,
     std::complex<double> relaxation_factor)
 {
     auto list_size = smoother_list.size();
@@ -197,7 +197,7 @@ void handle_list(
 
 
 struct MultigridState {
-    MultigridState(const LinOp *system_matrix_in, const Multigrid *multigrid_in,
+    MultigridState(const LinOp* system_matrix_in, const Multigrid* multigrid_in,
                    const size_type nrhs_in)
         : system_matrix(system_matrix_in),
           multigrid(multigrid_in),
@@ -261,8 +261,8 @@ struct MultigridState {
     }
 
     void run_cycle(multigrid::cycle cycle, size_type level,
-                   const std::shared_ptr<const LinOp> &matrix, const LinOp *b,
-                   LinOp *x, bool is_first = true, bool is_end = true)
+                   const std::shared_ptr<const LinOp>& matrix, const LinOp* b,
+                   LinOp* x, bool is_first = true, bool is_end = true)
     {
         if (level == multigrid->get_mg_level_list().size()) {
             multigrid->get_coarsest_solver()->apply(b, x);
@@ -281,8 +281,8 @@ struct MultigridState {
 
     template <typename VT>
     void run_cycle(multigrid::cycle cycle, size_type level,
-                   const std::shared_ptr<const LinOp> &matrix, const LinOp *b,
-                   LinOp *x, bool is_first, bool is_end)
+                   const std::shared_ptr<const LinOp>& matrix, const LinOp* b,
+                   LinOp* x, bool is_first, bool is_end)
     {
         auto total_level = multigrid->get_mg_level_list().size();
 
@@ -323,19 +323,23 @@ struct MultigridState {
         mg_level->get_restrict_op()->apply(r.get(), g.get());
         // next level
         e->fill(zero<VT>());
-        this->run_cycle(cycle, level + 1, mg_level->get_coarse_op(), g.get(),
-                        e.get(), true, cycle == multigrid::cycle::v);
+        auto next_level_matrix =
+            (level + 1 < total_level)
+                ? multigrid->get_mg_level_list().at(level + 1)->get_fine_op()
+                : mg_level->get_coarse_op();
+        this->run_cycle(cycle, level + 1, next_level_matrix, g.get(), e.get(),
+                        true, cycle == multigrid::cycle::v);
         if (level < multigrid->get_mg_level_list().size() - 1) {
             // additional work for non-v_cycle
             // next level
             if (cycle == multigrid::cycle::f) {
                 // f_cycle call v_cycle in the second cycle
                 this->run_cycle(multigrid::cycle::v, level + 1,
-                                mg_level->get_coarse_op(), g.get(), e.get(),
-                                false, true);
+                                next_level_matrix, g.get(), e.get(), false,
+                                true);
             } else if (cycle == multigrid::cycle::w) {
-                this->run_cycle(cycle, level + 1, mg_level->get_coarse_op(),
-                                g.get(), e.get(), false, true);
+                this->run_cycle(cycle, level + 1, next_level_matrix, g.get(),
+                                e.get(), false, true);
             } else if ((cycle == multigrid::cycle::kfcg ||
                         cycle == multigrid::cycle::kgcr) &&
                        level % multigrid->get_parameters().kcycle_base == 0) {
@@ -365,7 +369,7 @@ struct MultigridState {
     }
 
     struct KCycleMultiGridState {
-        void reserve_space(MultigridState *mg_state_in)
+        void reserve_space(MultigridState* mg_state_in)
         {
             mg_state = mg_state_in;
             auto k_num = (mg_state->multigrid->get_mg_level_list().size() - 1) /
@@ -410,8 +414,8 @@ struct MultigridState {
 
         template <typename VT>
         void kstep(multigrid::cycle cycle, size_type level,
-                   const std::shared_ptr<matrix::Dense<VT>> &g,
-                   const std::shared_ptr<matrix::Dense<VT>> &e)
+                   const std::shared_ptr<matrix::Dense<VT>>& g,
+                   const std::shared_ptr<matrix::Dense<VT>>& e)
         {
             auto mg_level = mg_state->multigrid->get_mg_level_list().at(level);
             auto exec = as<LinOp>(mg_level)->get_executor();
@@ -483,7 +487,7 @@ struct MultigridState {
                     d.get(), e.get()));
             }
         }
-        MultigridState *mg_state;
+        MultigridState* mg_state;
         // 1 x nrhs
         std::vector<std::shared_ptr<LinOp>> alpha_list;
         std::vector<std::shared_ptr<LinOp>> beta_list;
@@ -506,8 +510,8 @@ struct MultigridState {
     // constant 1 x 1
     std::vector<std::shared_ptr<const LinOp>> one_list;
     std::vector<std::shared_ptr<const LinOp>> neg_one_list;
-    const LinOp *system_matrix;
-    const Multigrid *multigrid;
+    const LinOp* system_matrix;
+    const Multigrid* multigrid;
     KCycleMultiGridState kcycle_state;
     size_type nrhs;
 };
@@ -560,7 +564,7 @@ void Multigrid::generate()
                         parameters_.smoother_relax);
                 }
             },
-            index, matrix);
+            index, mg_level->get_fine_op());
 
         mg_level_list_.emplace_back(mg_level);
         matrix = mg_level_list_.back()->get_coarse_op();
@@ -602,7 +606,7 @@ void Multigrid::generate()
 }
 
 
-void Multigrid::apply_impl(const LinOp *b, LinOp *x) const
+void Multigrid::apply_impl(const LinOp* b, LinOp* x) const
 {
     auto lambda = [this](auto mg_level, auto b, auto x) {
         using value_type = typename std::decay_t<
@@ -624,13 +628,13 @@ void Multigrid::apply_impl(const LinOp *b, LinOp *x) const
         if (parameters_.zero_guess) {
             using matrix::Dense;
             using std::complex;
-            if (auto dense = dynamic_cast<Dense<float> *>(x)) {
+            if (auto dense = dynamic_cast<Dense<float>*>(x)) {
                 dense->fill(zero<float>());
-            } else if (auto dense = dynamic_cast<Dense<double> *>(x)) {
+            } else if (auto dense = dynamic_cast<Dense<double>*>(x)) {
                 dense->fill(zero<double>());
-            } else if (auto dense = dynamic_cast<Dense<complex<float>> *>(x)) {
+            } else if (auto dense = dynamic_cast<Dense<complex<float>>*>(x)) {
                 dense->fill(zero<complex<float>>());
-            } else if (auto dense = dynamic_cast<Dense<complex<double>> *>(x)) {
+            } else if (auto dense = dynamic_cast<Dense<complex<double>>*>(x)) {
                 dense->fill(zero<complex<double>>());
             } else {
                 GKO_NOT_SUPPORTED(x);
@@ -670,8 +674,8 @@ void Multigrid::apply_impl(const LinOp *b, LinOp *x) const
 }
 
 
-void Multigrid::apply_impl(const LinOp *alpha, const LinOp *b,
-                           const LinOp *beta, LinOp *x) const
+void Multigrid::apply_impl(const LinOp* alpha, const LinOp* b,
+                           const LinOp* beta, LinOp* x) const
 {
     auto lambda = [this](auto mg_level, auto alpha, auto b, auto beta, auto x) {
         using value_type = typename std::decay_t<

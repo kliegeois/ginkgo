@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -53,7 +53,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ginkgo/core/matrix/sparsity_csr.hpp>
 
 
-#include "core/components/fill_array.hpp"
+#include "core/components/fill_array_kernels.hpp"
 #include "core/matrix/dense_kernels.hpp"
 #include "core/test/utils.hpp"
 #include "test/utils/executor.hpp"
@@ -926,6 +926,21 @@ TEST_F(Dense, ExtractDiagonalOnShortFatIntoDenseCrossExecutor)
     dy->extract_diagonal(ddiag.get());
 
     GKO_ASSERT_MTX_NEAR(diag.get(), ddiag.get(), 0);
+}
+
+
+TEST_F(Dense, ComputeNorm1IsEquivalentToRef)
+{
+    set_up_apply_data();
+
+    auto norm_size = gko::dim<2>{1, x->get_size()[1]};
+    auto norm_expected = NormVector::create(ref, norm_size);
+    auto dnorm = NormVector::create(ref, norm_size);
+
+    x->compute_norm1(norm_expected.get());
+    dx->compute_norm1(dnorm.get());
+
+    GKO_ASSERT_MTX_NEAR(x, dx, r<vtype>::value);
 }
 
 

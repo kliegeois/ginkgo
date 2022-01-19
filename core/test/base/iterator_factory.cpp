@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -96,7 +96,8 @@ protected:
     const std::vector<value_type> ordered_value;
 };
 
-TYPED_TEST_SUITE(IteratorFactory, gko::test::ValueIndexTypes);
+TYPED_TEST_SUITE(IteratorFactory, gko::test::ValueIndexTypes,
+                 PairTypenameNameGenerator);
 
 
 TYPED_TEST(IteratorFactory, EmptyIterator)

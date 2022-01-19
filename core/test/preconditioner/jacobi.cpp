@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -75,7 +75,8 @@ protected:
     std::shared_ptr<gko::matrix::Csr<value_type, index_type>> mtx;
 };
 
-TYPED_TEST_SUITE(JacobiFactory, gko::test::ValueIndexTypes);
+TYPED_TEST_SUITE(JacobiFactory, gko::test::ValueIndexTypes,
+                 PairTypenameNameGenerator);
 
 
 TYPED_TEST(JacobiFactory, KnowsItsExecutor)
@@ -156,7 +157,8 @@ protected:
                                                                         2};
 };
 
-TYPED_TEST_SUITE(BlockInterleavedStorageScheme, gko::test::IndexTypes);
+TYPED_TEST_SUITE(BlockInterleavedStorageScheme, gko::test::IndexTypes,
+                 TypenameNameGenerator);
 
 
 TYPED_TEST(BlockInterleavedStorageScheme, ComputesStorageSpace)

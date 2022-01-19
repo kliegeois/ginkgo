@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -75,6 +75,7 @@ GKO_REGISTER_OPERATION(sub_scaled_diag, dense::sub_scaled_diag);
 GKO_REGISTER_OPERATION(compute_dot, dense::compute_dot);
 GKO_REGISTER_OPERATION(compute_conj_dot, dense::compute_conj_dot);
 GKO_REGISTER_OPERATION(compute_norm2, dense::compute_norm2);
+GKO_REGISTER_OPERATION(compute_norm1, dense::compute_norm1);
 GKO_REGISTER_OPERATION(count_nonzeros, dense::count_nonzeros);
 GKO_REGISTER_OPERATION(calculate_max_nnz_per_row,
                        dense::calculate_max_nnz_per_row);
@@ -89,6 +90,7 @@ GKO_REGISTER_OPERATION(row_gather, dense::row_gather);
 GKO_REGISTER_OPERATION(column_permute, dense::column_permute);
 GKO_REGISTER_OPERATION(inverse_row_permute, dense::inverse_row_permute);
 GKO_REGISTER_OPERATION(inverse_column_permute, dense::inverse_column_permute);
+GKO_REGISTER_OPERATION(fill_in_matrix_data, dense::fill_in_matrix_data);
 GKO_REGISTER_OPERATION(convert_to_coo, dense::convert_to_coo);
 GKO_REGISTER_OPERATION(convert_to_csr, dense::convert_to_csr);
 GKO_REGISTER_OPERATION(convert_to_ell, dense::convert_to_ell);
@@ -410,6 +412,15 @@ void Dense<ValueType>::compute_norm2_impl(LinOp* result) const
     exec->run(dense::make_compute_norm2(this, dense_res.get()));
 }
 
+template <typename ValueType>
+void Dense<ValueType>::compute_norm1_impl(LinOp* result) const
+{
+    GKO_ASSERT_EQUAL_DIMENSIONS(result, dim<2>(1, this->get_size()[1]));
+    auto exec = this->get_executor();
+    auto dense_res =
+        make_temporary_conversion<remove_complex<ValueType>>(result);
+    exec->run(dense::make_compute_norm1(this, dense_res.get()));
+}
 
 template <typename ValueType>
 void Dense<ValueType>::convert_to(Dense<ValueType>* result) const
@@ -660,43 +671,49 @@ void Dense<ValueType>::move_to(SparsityCsr<ValueType, int64>* result)
 }
 
 
-namespace {
-
-
-template <typename MatrixType, typename MatrixData>
-inline void read_impl(MatrixType* mtx, const MatrixData& data)
+template <typename ValueType>
+void Dense<ValueType>::read(const device_mat_data& data)
 {
-    auto tmp = MatrixType::create(mtx->get_executor()->get_master(), data.size);
-    size_type ind = 0;
-    for (size_type row = 0; row < data.size[0]; ++row) {
-        for (size_type col = 0; col < data.size[1]; ++col) {
-            if (ind < data.nonzeros.size() && data.nonzeros[ind].row == row &&
-                data.nonzeros[ind].column == col) {
-                tmp->at(row, col) = data.nonzeros[ind].value;
-                ++ind;
-            } else {
-                tmp->at(row, col) = zero<typename MatrixType::value_type>();
-            }
-        }
+    if (this->get_size() != data.size) {
+        this->set_size(data.size);
+        this->stride_ = data.size[1];
+        this->values_.resize_and_reset(data.size[0] * this->get_stride());
     }
-    tmp->move_to(mtx);
+    auto exec = this->get_executor();
+    this->fill(zero<ValueType>());
+    exec->run(dense::make_fill_in_matrix_data(
+        *make_temporary_clone(exec, &data.nonzeros), this));
 }
 
 
-}  // namespace
+template <typename ValueType>
+void Dense<ValueType>::read(const device_mat_data32& data)
+{
+    if (this->get_size() != data.size) {
+        this->set_size(data.size);
+        this->stride_ = data.size[1];
+        this->values_.resize_and_reset(data.size[0] * this->get_stride());
+    }
+    auto exec = this->get_executor();
+    this->fill(zero<ValueType>());
+    exec->run(dense::make_fill_in_matrix_data(
+        *make_temporary_clone(exec, &data.nonzeros), this));
+}
 
 
 template <typename ValueType>
 void Dense<ValueType>::read(const mat_data& data)
 {
-    read_impl(this, data);
+    this->read(device_mat_data::create_view_from_host(
+        this->get_executor(), const_cast<mat_data&>(data)));
 }
 
 
 template <typename ValueType>
 void Dense<ValueType>::read(const mat_data32& data)
 {
-    read_impl(this, data);
+    this->read(device_mat_data32::create_view_from_host(
+        this->get_executor(), const_cast<mat_data32&>(data)));
 }
 
 
@@ -707,13 +724,7 @@ template <typename MatrixType, typename MatrixData>
 inline void write_impl(const MatrixType* mtx, MatrixData& data)
 {
     std::unique_ptr<const LinOp> op{};
-    const MatrixType* tmp{};
-    if (mtx->get_executor()->get_master() != mtx->get_executor()) {
-        op = mtx->clone(mtx->get_executor()->get_master());
-        tmp = static_cast<const MatrixType*>(op.get());
-    } else {
-        tmp = mtx;
-    }
+    auto tmp = make_temporary_clone(mtx->get_executor()->get_master(), mtx);
 
     data = {mtx->get_size(), {}};
 
@@ -1270,4 +1281,46 @@ GKO_INSTANTIATE_FOR_EACH_VALUE_TYPE(GKO_DECLARE_DENSE_MATRIX);
 
 
 }  // namespace matrix
+
+
+#define GKO_DECLARE_CONCATENATE_DENSE_MATRIX(ValueType)                   \
+    std::unique_ptr<matrix::Dense<ValueType>> concatenate_dense_matrices( \
+        std::shared_ptr<const Executor> exec,                             \
+        const std::vector<std::unique_ptr<matrix::Dense<ValueType>>>&     \
+            matrices)
+
+template <typename ValueType>
+GKO_DECLARE_CONCATENATE_DENSE_MATRIX(ValueType)
+{
+    using mtx_type = matrix::Dense<ValueType>;
+    if (matrices.size() == 0) {
+        return mtx_type::create(exec);
+    }
+    size_type total_rows = 0;
+    const size_type ncols = matrices[0]->get_size()[1];
+    for (size_type imat = 0; imat < matrices.size(); imat++) {
+        GKO_ASSERT_EQUAL_COLS(matrices[0], matrices[imat]);
+        total_rows += matrices[imat]->get_size()[0];
+    }
+    auto temp = mtx_type::create(exec->get_master(), dim<2>(total_rows, ncols));
+    size_type roffset = 0;
+    for (size_type im = 0; im < matrices.size(); im++) {
+        auto imatrix = mtx_type::create(exec->get_master());
+        imatrix->copy_from(matrices[im].get());
+        for (size_type irow = 0; irow < imatrix->get_size()[0]; irow++) {
+            for (size_type icol = 0; icol < ncols; icol++) {
+                temp->at(irow + roffset, icol) = imatrix->at(irow, icol);
+            }
+        }
+        roffset += imatrix->get_size()[0];
+    }
+    assert(roffset == total_rows);
+    auto outm = mtx_type::create(exec);
+    outm->copy_from(temp.get());
+    return outm;
+}
+
+GKO_INSTANTIATE_FOR_EACH_VALUE_TYPE(GKO_DECLARE_CONCATENATE_DENSE_MATRIX);
+
+
 }  // namespace gko

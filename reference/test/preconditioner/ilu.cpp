@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -125,7 +125,7 @@ protected:
     std::shared_ptr<typename ilu_rev_prec_type::Factory> ilu_rev_pre_factory;
 };
 
-TYPED_TEST_SUITE(Ilu, gko::test::ValueTypes);
+TYPED_TEST_SUITE(Ilu, gko::test::ValueTypes, TypenameNameGenerator);
 
 
 TYPED_TEST(Ilu, BuildsDefaultWithoutThrowing)

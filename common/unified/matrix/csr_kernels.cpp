@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -53,6 +53,26 @@ namespace GKO_DEVICE_NAMESPACE {
 namespace csr {
 
 
+template <typename ValueType, typename IndexType>
+void fill_in_matrix_data(
+    std::shared_ptr<const DefaultExecutor> exec,
+    const Array<matrix_data_entry<ValueType, IndexType>>& nonzeros,
+    matrix::Csr<ValueType, IndexType>* output)
+{
+    run_kernel(
+        exec,
+        [] GKO_KERNEL(auto i, auto nonzeros, auto cols, auto values) {
+            cols[i] = nonzeros[i].column;
+            values[i] = unpack_member(nonzeros[i].value);
+        },
+        nonzeros.get_num_elems(), nonzeros, output->get_col_idxs(),
+        output->get_values());
+}
+
+GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(
+    GKO_DECLARE_CSR_FILL_IN_MATRIX_DATA_KERNEL);
+
+
 template <typename IndexType>
 void invert_permutation(std::shared_ptr<const DefaultExecutor> exec,
                         size_type size, const IndexType* permutation_indices,
@@ -100,6 +120,36 @@ void inverse_column_permute(std::shared_ptr<const DefaultExecutor> exec,
 
 GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(
     GKO_DECLARE_CSR_INVERSE_COLUMN_PERMUTE_KERNEL);
+
+
+template <typename ValueType, typename IndexType>
+void scale(std::shared_ptr<const DefaultExecutor> exec,
+           const matrix::Dense<ValueType>* alpha,
+           matrix::Csr<ValueType, IndexType>* x)
+{
+    run_kernel(
+        exec,
+        [] GKO_KERNEL(auto nnz, auto alpha, auto x) { x[nnz] *= alpha[0]; },
+        x->get_num_stored_elements(), alpha->get_const_values(),
+        x->get_values());
+}
+
+GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(GKO_DECLARE_CSR_SCALE_KERNEL);
+
+
+template <typename ValueType, typename IndexType>
+void inv_scale(std::shared_ptr<const DefaultExecutor> exec,
+               const matrix::Dense<ValueType>* alpha,
+               matrix::Csr<ValueType, IndexType>* x)
+{
+    run_kernel(
+        exec,
+        [] GKO_KERNEL(auto nnz, auto alpha, auto x) { x[nnz] /= alpha[0]; },
+        x->get_num_stored_elements(), alpha->get_const_values(),
+        x->get_values());
+}
+
+GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(GKO_DECLARE_CSR_INV_SCALE_KERNEL);
 
 
 }  // namespace csr

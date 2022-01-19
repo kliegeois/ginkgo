@@ -3,10 +3,11 @@ find_package(OpenMP 3.0 REQUIRED)
 add_library(ginkgo_omp $<TARGET_OBJECTS:ginkgo_omp_device> "")
 target_sources(ginkgo_omp
     PRIVATE
+    base/index_set_kernels.cpp
     base/version.cpp
-    components/absolute_array.cpp
-    components/fill_array.cpp
-    components/prefix_sum.cpp
+    components/device_matrix_data_kernels.cpp
+    components/prefix_sum_kernels.cpp
+    distributed/partition_kernels.cpp
     factorization/factorization_kernels.cpp
     factorization/ic_kernels.cpp
     factorization/ilu_kernels.cpp
@@ -16,12 +17,14 @@ target_sources(ginkgo_omp
     factorization/par_ilut_kernels.cpp
     matrix/batch_csr_kernels.cpp
     matrix/batch_dense_kernels.cpp
+    matrix/batch_ell_kernels.cpp
     matrix/coo_kernels.cpp
     matrix/csr_kernels.cpp
     matrix/dense_kernels.cpp
     matrix/diagonal_kernels.cpp
     matrix/ell_kernels.cpp
     matrix/fbcsr_kernels.cpp
+    matrix/fft_kernels.cpp
     matrix/hybrid_kernels.cpp
     matrix/sellp_kernels.cpp
     matrix/sparsity_csr_kernels.cpp
@@ -45,18 +48,7 @@ target_sources(ginkgo_omp
     solver/upper_trs_kernels.cpp
     stop/criterion_kernels.cpp
     stop/residual_norm_kernels.cpp
-    ../common/unified/components/precision_conversion.cpp
-    ../common/unified/matrix/coo_kernels.cpp
-    ../common/unified/matrix/csr_kernels.cpp
-    ../common/unified/matrix/dense_kernels.cpp
-    ../common/unified/matrix/diagonal_kernels.cpp
-    ../common/unified/preconditioner/jacobi_kernels.cpp
-    ../common/unified/solver/bicg_kernels.cpp
-    ../common/unified/solver/bicgstab_kernels.cpp
-    ../common/unified/solver/cg_kernels.cpp
-    ../common/unified/solver/cgs_kernels.cpp
-    ../common/unified/solver/fcg_kernels.cpp
-    ../common/unified/solver/ir_kernels.cpp
+    ${GKO_UNIFIED_COMMON_SOURCES}
     )
 
 ginkgo_compile_features(ginkgo_omp)

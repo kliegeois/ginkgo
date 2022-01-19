@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -41,6 +41,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ginkgo/core/base/math.hpp>
 #include <ginkgo/core/matrix/dense.hpp>
 #include <ginkgo/core/stop/stopping_status.hpp>
+
+
+#include "core/base/kernel_declaration.hpp"
 
 
 namespace gko {
@@ -87,49 +90,7 @@ namespace fcg {
 }  // namespace fcg
 
 
-namespace omp {
-namespace fcg {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace fcg
-}  // namespace omp
-
-
-namespace cuda {
-namespace fcg {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace fcg
-}  // namespace cuda
-
-
-namespace reference {
-namespace fcg {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace fcg
-}  // namespace reference
-
-
-namespace hip {
-namespace fcg {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace fcg
-}  // namespace hip
-
-
-namespace dpcpp {
-namespace fcg {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace fcg
-}  // namespace dpcpp
+GKO_DECLARE_FOR_ALL_EXECUTOR_NAMESPACES(fcg, GKO_DECLARE_ALL_AS_TEMPLATES);
 
 
 #undef GKO_DECLARE_ALL_AS_TEMPLATES

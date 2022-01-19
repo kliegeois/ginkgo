@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -41,6 +41,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ginkgo/core/matrix/dense.hpp>
 
 
+#include "core/base/kernel_declaration.hpp"
+
+
 namespace gko {
 namespace kernels {
 
@@ -57,6 +60,13 @@ namespace kernels {
                        const matrix::Dense<ValueType>* b,                   \
                        const matrix::Dense<ValueType>* beta,                \
                        matrix::Dense<ValueType>* c)
+
+#define GKO_DECLARE_SPARSITY_CSR_FILL_IN_MATRIX_DATA_KERNEL(ValueType, \
+                                                            IndexType) \
+    void fill_in_matrix_data(                                          \
+        std::shared_ptr<const DefaultExecutor> exec,                   \
+        const Array<matrix_data_entry<ValueType, IndexType>>& data,    \
+        matrix::SparsityCsr<ValueType, IndexType>* output)
 
 #define GKO_DECLARE_SPARSITY_CSR_REMOVE_DIAGONAL_ELEMENTS_KERNEL(ValueType, \
                                                                  IndexType) \
@@ -89,68 +99,29 @@ namespace kernels {
         const matrix::SparsityCsr<ValueType, IndexType>* to_check,    \
         bool* is_sorted)
 
-#define GKO_DECLARE_ALL_AS_TEMPLATES                                        \
-    template <typename ValueType, typename IndexType>                       \
-    GKO_DECLARE_SPARSITY_CSR_SPMV_KERNEL(ValueType, IndexType);             \
-    template <typename ValueType, typename IndexType>                       \
-    GKO_DECLARE_SPARSITY_CSR_ADVANCED_SPMV_KERNEL(ValueType, IndexType);    \
-    template <typename ValueType, typename IndexType>                       \
-    GKO_DECLARE_SPARSITY_CSR_REMOVE_DIAGONAL_ELEMENTS_KERNEL(ValueType,     \
-                                                             IndexType);    \
-    template <typename ValueType, typename IndexType>                       \
-    GKO_DECLARE_SPARSITY_CSR_COUNT_NUM_DIAGONAL_ELEMENTS_KERNEL(ValueType,  \
-                                                                IndexType); \
-    template <typename ValueType, typename IndexType>                       \
-    GKO_DECLARE_SPARSITY_CSR_TRANSPOSE_KERNEL(ValueType, IndexType);        \
-    template <typename ValueType, typename IndexType>                       \
-    GKO_DECLARE_SPARSITY_CSR_SORT_BY_COLUMN_INDEX(ValueType, IndexType);    \
-    template <typename ValueType, typename IndexType>                       \
+#define GKO_DECLARE_ALL_AS_TEMPLATES                                           \
+    template <typename ValueType, typename IndexType>                          \
+    GKO_DECLARE_SPARSITY_CSR_SPMV_KERNEL(ValueType, IndexType);                \
+    template <typename ValueType, typename IndexType>                          \
+    GKO_DECLARE_SPARSITY_CSR_ADVANCED_SPMV_KERNEL(ValueType, IndexType);       \
+    template <typename ValueType, typename IndexType>                          \
+    GKO_DECLARE_SPARSITY_CSR_FILL_IN_MATRIX_DATA_KERNEL(ValueType, IndexType); \
+    template <typename ValueType, typename IndexType>                          \
+    GKO_DECLARE_SPARSITY_CSR_REMOVE_DIAGONAL_ELEMENTS_KERNEL(ValueType,        \
+                                                             IndexType);       \
+    template <typename ValueType, typename IndexType>                          \
+    GKO_DECLARE_SPARSITY_CSR_COUNT_NUM_DIAGONAL_ELEMENTS_KERNEL(ValueType,     \
+                                                                IndexType);    \
+    template <typename ValueType, typename IndexType>                          \
+    GKO_DECLARE_SPARSITY_CSR_TRANSPOSE_KERNEL(ValueType, IndexType);           \
+    template <typename ValueType, typename IndexType>                          \
+    GKO_DECLARE_SPARSITY_CSR_SORT_BY_COLUMN_INDEX(ValueType, IndexType);       \
+    template <typename ValueType, typename IndexType>                          \
     GKO_DECLARE_SPARSITY_CSR_IS_SORTED_BY_COLUMN_INDEX(ValueType, IndexType)
 
 
-namespace omp {
-namespace sparsity_csr {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace sparsity_csr
-}  // namespace omp
-
-
-namespace cuda {
-namespace sparsity_csr {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace sparsity_csr
-}  // namespace cuda
-
-
-namespace reference {
-namespace sparsity_csr {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace sparsity_csr
-}  // namespace reference
-
-
-namespace hip {
-namespace sparsity_csr {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace sparsity_csr
-}  // namespace hip
-
-
-namespace dpcpp {
-namespace sparsity_csr {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace sparsity_csr
-}  // namespace dpcpp
+GKO_DECLARE_FOR_ALL_EXECUTOR_NAMESPACES(sparsity_csr,
+                                        GKO_DECLARE_ALL_AS_TEMPLATES);
 
 
 #undef GKO_DECLARE_ALL_AS_TEMPLATES

@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -39,19 +39,22 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ginkgo/core/base/math.hpp>
 
 
-//#include "hip/base/config.hip.hpp"
+#include "core/solver/batch_dispatch.hpp"
+#include "hip/base/config.hip.hpp"
+#include "hip/base/exception.hip.hpp"
 #include "hip/base/math.hip.hpp"
 #include "hip/base/types.hip.hpp"
 #include "hip/components/cooperative_groups.hip.hpp"
-//#include "hip/matrix/batch_struct.hip.hpp"
+#include "hip/components/thread_ids.hip.hpp"
+#include "hip/matrix/batch_struct.hip.hpp"
 
 
 namespace gko {
 namespace kernels {
 namespace hip {
 
-#define GKO_CUDA_BATCH_USE_DYNAMIC_SHARED_MEM 1
-constexpr int default_block_size = 128;
+
+constexpr int default_block_size = 256;
 constexpr int sm_multiplier = 4;
 
 /**
@@ -61,131 +64,118 @@ constexpr int sm_multiplier = 4;
  */
 namespace batch_bicgstab {
 
-// #include "common/components/uninitialized_array.hpp.inc"
+#include "common/cuda_hip/components/uninitialized_array.hpp.inc"
+// include all depedencies (note: do not remove this comment)
+#include "common/cuda_hip/matrix/batch_csr_kernels.hpp.inc"
+#include "common/cuda_hip/matrix/batch_dense_kernels.hpp.inc"
+#include "common/cuda_hip/matrix/batch_ell_kernels.hpp.inc"
+#include "common/cuda_hip/matrix/batch_vector_kernels.hpp.inc"
+#include "common/cuda_hip/solver/batch_bicgstab_kernels.hpp.inc"
 
 
-// #include "common/log/batch_logger.hpp.inc"
-// #include "common/matrix/batch_csr_kernels.hpp.inc"
-// #include "common/matrix/batch_dense_kernels.hpp.inc"
-// #include "common/preconditioner/batch_identity.hpp.inc"
-// #include "common/preconditioner/batch_jacobi.hpp.inc"
-// #include "common/stop/batch_criteria.hpp.inc"
-
-
-// #include "common/solver/batch_bicgstab_kernels.hpp.inc"
-
+template <typename BatchMatrixType>
+int get_num_threads_per_block(std::shared_ptr<const HipExecutor> exec,
+                              const int num_rows)
+{
+    int nwarps = num_rows / 4;
+    if (nwarps < 2) {
+        nwarps = 2;
+    }
+    constexpr int device_max_threads = 1024;
+    const int num_regs_used_per_thread = 64;
+    int max_regs_blk = 0;
+    hipDeviceGetAttribute(&max_regs_blk, hipDeviceAttributeMaxRegistersPerBlock,
+                          exec->get_device_id());
+    const int max_threads_regs =
+        ((max_regs_blk / num_regs_used_per_thread) / config::warp_size) *
+        config::warp_size;
+    const int max_threads = std::min(max_threads_regs, device_max_threads);
+    return std::min(nwarps * static_cast<int>(config::warp_size), max_threads);
+}
 
 template <typename T>
 using BatchBicgstabOptions =
     gko::kernels::batch_bicgstab::BatchBicgstabOptions<T>;
 
-// template <typename BatchMatrixType, typename LogType, typename ValueType>
-// static void apply_impl(
-//     std::shared_ptr<const HipExecutor> exec,
-//     const BatchBicgstabOptions<remove_complex<ValueType>> opts, LogType
-//     logger, const BatchMatrixType &a, const
-//     gko::batch_dense::UniformBatch<const ValueType> &left, const
-//     gko::batch_dense::UniformBatch<const ValueType> &right, const
-//     gko::batch_dense::UniformBatch<ValueType> &b, const
-//     gko::batch_dense::UniformBatch<ValueType> &x)
-// {
-//     using real_type = gko::remove_complex<ValueType>;
-//     const size_type nbatch = a.num_batch;
 
+template <typename DValueType>
+class KernelCaller {
+public:
+    using value_type = DValueType;
 
-//     if (opts.preconditioner == gko::preconditioner::batch::type::none) {
-//         const int shared_size =
-// #if GKO_CUDA_BATCH_USE_DYNAMIC_SHARED_MEM
-//             gko::kernels::batch_bicgstab::local_memory_requirement<ValueType>(
-//                 a.num_rows, b.num_rhs) +
-//             BatchIdentity<ValueType>::dynamic_work_size(a.num_rows,
-//             a.num_nnz) *
-//                 sizeof(ValueType);
-// #else
-//             0;
-// #endif
+    KernelCaller(std::shared_ptr<const HipExecutor> exec,
+                 const BatchBicgstabOptions<remove_complex<value_type>> opts)
+        : exec_{exec}, opts_{opts}
+    {}
 
-//         hipLaunchKernelGGL(
-//             HIP_KERNEL_NAME(
-//                 apply_kernel<stop::AbsOrRelResidualMaxIter<ValueType>>),
-//             dim3(nbatch), dim3(default_block_size), shared_size, 0,
-//             opts.max_its, opts.abs_residual_tol, opts.rel_residual_tol,
-//             opts.tol_type, logger, BatchIdentity<ValueType>(), a, left,
-//             right, b, x);
+    template <typename BatchMatrixType, typename PrecType, typename StopType,
+              typename LogType>
+    void call_kernel(LogType logger, const BatchMatrixType& a,
+                     const gko::batch_dense::UniformBatch<const value_type>& b,
+                     const gko::batch_dense::UniformBatch<value_type>& x) const
+    {
+        using real_type = gko::remove_complex<value_type>;
+        const size_type nbatch = a.num_batch;
+        const int shared_gap = ((a.num_rows - 1) / 8 + 1) * 8;
+        static_assert(default_block_size >= 2 * config::warp_size,
+                      "Need at least two warps!");
 
-//     } else if (opts.preconditioner ==
-//                gko::preconditioner::batch::type::jacobi) {
-//         const int shared_size =
-// #if GKO_CUDA_BATCH_USE_DYNAMIC_SHARED_MEM
-//             gko::kernels::batch_bicgstab::local_memory_requirement<ValueType>(
-//                 a.num_rows, b.num_rhs) +
-//             BatchJacobi<ValueType>::dynamic_work_size(a.num_rows, a.num_nnz)
-//             *
-//                 sizeof(ValueType);
-// #else
-//             0;
-// #endif
+        const int block_size =
+            get_num_threads_per_block<BatchMatrixType>(exec_, a.num_rows);
+        assert(block_size >= 2 * config::warp_size);
+        const size_t prec_size =
+            PrecType::dynamic_work_size(shared_gap, a.num_nnz) *
+            sizeof(value_type);
+        const int shmem_per_blk = exec_->get_max_shared_memory_per_block();
+        const auto sconf =
+            gko::kernels::batch_bicgstab::compute_shared_storage<PrecType,
+                                                                 value_type>(
+                shmem_per_blk, shared_gap, a.num_nnz, b.num_rhs);
+        const size_t shared_size =
+            sconf.n_shared * shared_gap * sizeof(value_type) +
+            (sconf.prec_shared ? prec_size : 0);
+        auto workspace = gko::Array<value_type>(
+            exec_, sconf.gmem_stride_bytes * nbatch / sizeof(value_type));
+        assert(sconf.gmem_stride_bytes % sizeof(value_type) == 0);
 
-//         hipLaunchKernelGGL(
-//             HIP_KERNEL_NAME(
-//                 apply_kernel<stop::AbsOrRelResidualMaxIter<ValueType>>),
-//             dim3(nbatch), dim3(default_block_size), shared_size, 0,
-//             opts.max_its, opts.abs_residual_tol, opts.rel_residual_tol,
-//             opts.tol_type, logger, BatchJacobi<ValueType>(), a, left, right,
-//             b, x);
+        // std::cerr << " Bicgstab: vectors in shared memory = " <<
+        // sconf.n_shared
+        //          << "\n";
+        // if (sconf.prec_shared) {
+        //    std::cerr << " Bicgstab: precondiioner is in shared memory.\n";
+        //}
+        // std::cerr << " Bicgstab: vectors in global memory = " <<
+        // sconf.n_global
+        //          << "\n Hip: number of threads per warp = "
+        //          << config::warp_size
+        //          << "\n Bicgstab: number of threads per block = " <<
+        //          block_size
+        //          << "\n";
+        hipLaunchKernelGGL(
+            apply_kernel<StopType>, dim3(nbatch), dim3(block_size), shared_size,
+            0, shared_gap, sconf, opts_.max_its, opts_.residual_tol, logger,
+            PrecType(), a, b.values, x.values, workspace.get_data());
+    }
 
-//     } else {
-//         GKO_NOT_IMPLEMENTED;
-//     }
-// }
+private:
+    std::shared_ptr<const HipExecutor> exec_;
+    const BatchBicgstabOptions<remove_complex<value_type>> opts_;
+};
 
 
 template <typename ValueType>
 void apply(std::shared_ptr<const HipExecutor> exec,
-           const BatchBicgstabOptions<remove_complex<ValueType>> &opts,
-           const BatchLinOp *const a,
-           const matrix::BatchDense<ValueType> *const b,
-           matrix::BatchDense<ValueType> *const x,
-           log::BatchLogData<ValueType> &logdata) GKO_NOT_IMPLEMENTED;
-// {
-//     using hip_value_type = hip_type<ValueType>;
-
-//     // For now, FinalLogger is the only one available
-//     batch_log::FinalLogger<remove_complex<ValueType>> logger(
-//         static_cast<int>(b->get_size().at(0)[1]), opts.max_its,
-//         logdata.res_norms->get_values(), logdata.iter_counts.get_data());
-
-
-//     const gko::batch_dense::UniformBatch<const hip_value_type> left_sb =
-//         maybe_null_batch_struct(left_scale);
-//     const gko::batch_dense::UniformBatch<const hip_value_type> right_sb =
-//         maybe_null_batch_struct(right_scale);
-//     const auto to_scale = left_sb.values || right_sb.values;
-//     if (to_scale) {
-//         if (!left_sb.values || !right_sb.values) {
-//             // one-sided scaling not implemented
-//             GKO_NOT_IMPLEMENTED;
-//         }
-//     }
-
-
-//     const gko::batch_dense::UniformBatch<hip_value_type> x_b =
-//         get_batch_struct(x);
-
-//     if (auto amat = dynamic_cast<const matrix::BatchCsr<ValueType> *>(a)) {
-//         const gko::batch_csr::UniformBatch<hip_value_type> m_b =
-//             get_batch_struct(const_cast<matrix::BatchCsr<ValueType>
-//             *>(amat));
-
-//         const gko::batch_dense::UniformBatch<hip_value_type> b_b =
-//             get_batch_struct(const_cast<matrix::BatchDense<ValueType> *>(b));
-
-//         apply_impl(exec, opts, logger, m_b, left_sb, right_sb, b_b, x_b);
-//     } else {
-//         GKO_NOT_SUPPORTED(a);
-//     }
-// }
-
+           const BatchBicgstabOptions<remove_complex<ValueType>>& opts,
+           const BatchLinOp* const a,
+           const matrix::BatchDense<ValueType>* const b,
+           matrix::BatchDense<ValueType>* const x,
+           log::BatchLogData<ValueType>& logdata)
+{
+    using d_value_type = hip_type<ValueType>;
+    auto dispatcher = batch_solver::create_dispatcher<ValueType>(
+        KernelCaller<d_value_type>(exec, opts), opts);
+    dispatcher.apply(a, b, x, logdata);
+}
 
 GKO_INSTANTIATE_FOR_EACH_VALUE_TYPE(GKO_DECLARE_BATCH_BICGSTAB_APPLY_KERNEL);
 

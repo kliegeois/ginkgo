@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -217,6 +217,20 @@ std::shared_ptr<const Dest> convert_to_with_sorting(
 {
     return detail::convert_to_with_sorting_impl<const Dest>(exec, obj,
                                                             skip_sorting);
+}
+
+/**
+ * Converts the given arguments into an array of entries of the requested
+ * template type.
+ *
+ * @tparam T  The requested type of entries in the output array.
+ *
+ * @param args  Entities to be filled into an array after casting to type T.
+ */
+template <typename T, typename... Args>
+constexpr std::array<T, sizeof...(Args)> to_std_array(Args&&... args)
+{
+    return {static_cast<T>(args)...};
 }
 
 

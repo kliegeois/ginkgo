@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -159,7 +159,7 @@ using size_type = gko::size_type;
  *
  * @param extra  describes benchmark specific extra parameters to output
  */
-void print_general_information(std::string& extra)
+void print_general_information(const std::string& extra)
 {
     std::clog << gko::version_info::get() << std::endl
               << "Running on " << FLAGS_executor << "(" << FLAGS_device_id
@@ -758,6 +758,11 @@ private:
             return cur_it >= min_it &&
                    (cur_it >= max_it ||
                     managed_timer.get_total_time() >= max_runtime);
+        }
+
+        bool is_last_iteration() const
+        {
+            return cur_it >= min_it && cur_it == max_it - 1;
         }
     };
 

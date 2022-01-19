@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -92,8 +92,11 @@ public:
     using index_type = IndexType;
     using transposed_type = SparsityCsr<IndexType, ValueType>;
     using mat_data = matrix_data<ValueType, IndexType>;
+    using device_mat_data = device_matrix_data<ValueType, IndexType>;
 
     void read(const mat_data& data) override;
+
+    void read(const device_mat_data& data) override;
 
     void write(mat_data& data) const override;
 
@@ -190,6 +193,32 @@ public:
     size_type get_num_nonzeros() const noexcept
     {
         return col_idxs_.get_num_elems();
+    }
+
+    /**
+     * Creates a constant (immutable) SparsityCsr matrix from constant arrays.
+     *
+     * @param exec  the executor to create the matrix on
+     * @param size  the dimensions of the matrix
+     * @param values  the value array of the matrix
+     * @param col_idxs  the column index array of the matrix
+     * @param row_ptrs  the row pointer array of the matrix
+     * @param strategy  the strategy the matrix uses for SpMV operations
+     * @returns A smart pointer to the constant matrix wrapping the input arrays
+     *          (if they reside on the same executor as the matrix) or a copy of
+     *          these arrays on the correct executor.
+     */
+    static std::unique_ptr<const SparsityCsr> create_const(
+        std::shared_ptr<const Executor> exec, const dim<2>& size,
+        gko::detail::ConstArrayView<IndexType>&& col_idxs,
+        gko::detail::ConstArrayView<IndexType>&& row_ptrs,
+        ValueType value = one<ValueType>())
+    {
+        // cast const-ness away, but return a const object afterwards,
+        // so we can ensure that no modifications take place.
+        return std::unique_ptr<const SparsityCsr>(new SparsityCsr{
+            exec, size, gko::detail::array_const_cast(std::move(col_idxs)),
+            gko::detail::array_const_cast(std::move(row_ptrs)), value});
     }
 
 protected:

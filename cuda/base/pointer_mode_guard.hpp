@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -108,9 +108,9 @@ namespace cusparse {
  */
 class pointer_mode_guard {
 public:
-    pointer_mode_guard(cusparseHandle_t& handle)
+    pointer_mode_guard(cusparseHandle_t handle)
     {
-        l_handle = &handle;
+        l_handle = handle;
         GKO_ASSERT_NO_CUSPARSE_ERRORS(
             cusparseSetPointerMode(handle, CUSPARSE_POINTER_MODE_HOST));
     }
@@ -127,15 +127,15 @@ public:
     {
         /* Ignore the error during stack unwinding for this call */
         if (std::uncaught_exception()) {
-            cusparseSetPointerMode(*l_handle, CUSPARSE_POINTER_MODE_DEVICE);
+            cusparseSetPointerMode(l_handle, CUSPARSE_POINTER_MODE_DEVICE);
         } else {
-            GKO_ASSERT_NO_CUSPARSE_ERRORS(cusparseSetPointerMode(
-                *l_handle, CUSPARSE_POINTER_MODE_DEVICE));
+            GKO_ASSERT_NO_CUSPARSE_ERRORS(
+                cusparseSetPointerMode(l_handle, CUSPARSE_POINTER_MODE_DEVICE));
         }
     }
 
 private:
-    cusparseHandle_t* l_handle;
+    cusparseHandle_t l_handle;
 };
 
 

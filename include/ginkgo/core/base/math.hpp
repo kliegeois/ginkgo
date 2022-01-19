@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -459,6 +459,31 @@ struct infinity_impl {
 };
 
 
+/**
+ * Computes the highest-precision type from a list of types
+ */
+template <typename T1, typename T2>
+struct highest_precision_impl {
+    using type = decltype(T1{} + T2{});
+};
+
+template <typename T1, typename T2>
+struct highest_precision_impl<std::complex<T1>, std::complex<T2>> {
+    using type = std::complex<typename highest_precision_impl<T1, T2>::type>;
+};
+
+template <typename Head, typename... Tail>
+struct highest_precision_variadic {
+    using type = typename highest_precision_impl<
+        Head, typename highest_precision_variadic<Tail...>::type>::type;
+};
+
+template <typename Head>
+struct highest_precision_variadic<Head> {
+    using type = Head;
+};
+
+
 }  // namespace detail
 
 
@@ -481,6 +506,22 @@ using reduce_precision = typename detail::reduce_precision_impl<T>::type;
  */
 template <typename T>
 using increase_precision = typename detail::increase_precision_impl<T>::type;
+
+
+/**
+ * Obtains the smallest arithmetic type that is able to store elements of all
+ * template parameter types exactly. All template type parameters need to be
+ * either real or complex types, mixing them is not possible.
+ *
+ * Formally, it computes a right-fold over the type list, with the highest
+ * precision of a pair of real arithmetic types T1, T2 computed as
+ * `decltype(T1{} + T2{})`, or
+ * `std::complex<highest_precision<remove_complex<T1>, remove_complex<T2>>>` for
+ * complex types.
+ */
+template <typename... Ts>
+using highest_precision =
+    typename detail::highest_precision_variadic<Ts...>::type;
 
 
 /**
@@ -932,6 +973,35 @@ abs(const T& x)
 
 
 /**
+ * Returns the value of pi.
+ *
+ * @tparam T  the value type to return
+ */
+template <typename T>
+GKO_INLINE GKO_ATTRIBUTES constexpr T pi()
+{
+    return static_cast<T>(3.1415926535897932384626433);
+}
+
+
+/**
+ * Returns the value of exp(2 * pi * i * k / n), i.e. an nth root of unity.
+ *
+ * @param n  the denominator of the argument
+ * @param k  the numerator of the argument. Defaults to 1.
+ *
+ * @tparam T  the corresponding real value type.
+ */
+template <typename T>
+GKO_INLINE GKO_ATTRIBUTES constexpr std::complex<remove_complex<T>> unit_root(
+    int64 n, int64 k = 1)
+{
+    return std::polar(one<remove_complex<T>>(),
+                      remove_complex<T>{2} * pi<remove_complex<T>>() * k / n);
+}
+
+
+/**
  * Returns the position of the most significant bit of the number.
  *
  * This is the same as the rounded down base-2 logarithm of the number.
@@ -1023,6 +1093,70 @@ template <typename T>
 GKO_INLINE GKO_ATTRIBUTES T safe_divide(T a, T b)
 {
     return b == zero<T>() ? zero<T>() : a / b;
+}
+
+
+/**
+ * Checks if a floating point number is NaN.
+ *
+ * @tparam T  type of the value to check
+ *
+ * @param value  value to check
+ *
+ * @return `true` if the value is NaN.
+ */
+template <typename T>
+GKO_INLINE GKO_ATTRIBUTES std::enable_if_t<!is_complex_s<T>::value, bool>
+is_nan(const T& value)
+{
+    return std::isnan(value);
+}
+
+
+/**
+ * Checks if any component of a complex value is NaN.
+ *
+ * @tparam T  complex type of the value to check
+ *
+ * @param value  complex value to check
+ *
+ * @return `true` if any component of the given value is NaN.
+ */
+template <typename T>
+GKO_INLINE GKO_ATTRIBUTES std::enable_if_t<is_complex_s<T>::value, bool> is_nan(
+    const T& value)
+{
+    return std::isnan(value.real()) || std::isnan(value.imag());
+}
+
+
+/**
+ * Returns a quiet NaN of the given type.
+ *
+ * @tparam T  the type of the object
+ *
+ * @return NaN.
+ */
+template <typename T>
+GKO_INLINE GKO_ATTRIBUTES constexpr std::enable_if_t<!is_complex_s<T>::value, T>
+nan()
+{
+    return std::numeric_limits<T>::quiet_NaN();
+}
+
+
+/**
+ * Returns a complex with both components quiet NaN.
+ *
+ * @tparam T  the type of the object
+ *
+ * @return complex{NaN, NaN}.
+ */
+template <typename T>
+GKO_INLINE GKO_ATTRIBUTES constexpr std::enable_if_t<is_complex_s<T>::value, T>
+nan()
+{
+    return T{nan<remove_complex<T>>(), nan<remove_complex<T>>()};
 }
 
 

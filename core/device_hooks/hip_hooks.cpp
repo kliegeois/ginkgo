@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -131,6 +131,12 @@ std::string HiprandError::get_error(int64)
 
 
 std::string HipsparseError::get_error(int64)
+{
+    return "ginkgo HIP module is not compiled";
+}
+
+
+std::string HipfftError::get_error(int64)
 {
     return "ginkgo HIP module is not compiled";
 }

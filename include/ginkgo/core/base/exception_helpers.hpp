@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -354,6 +354,21 @@ inline std::tuple<bool, int> check_batch_right_scalable(
 
 
 /**
+ *Asserts that _val is a power of two.
+ *
+ *@throw BadDimension  if _val is not a power of two.
+ */
+#define GKO_ASSERT_IS_POWER_OF_TWO(_val)                                   \
+    do {                                                                   \
+        if (_val == 0 || (_val & (_val - 1)) != 0) {                       \
+            throw ::gko::BadDimension(__FILE__, __LINE__, __func__, #_val, \
+                                      _val, _val,                          \
+                                      "expected power-of-two dimension");  \
+        }                                                                  \
+    } while (false)
+
+
+/**
  * Asserts that _op1 can be applied to _op2.
  *
  * @throw DimensionMismatch  if _op1 cannot be applied to _op2.
@@ -560,8 +575,6 @@ inline std::tuple<bool, int> check_batch_right_scalable(
                 "expected equal dimensions");                                  \
         }                                                                      \
     }
-
-
 /**
  *Asserts that _op is a batch made up of square matrices.
  *
@@ -583,6 +596,16 @@ inline std::tuple<bool, int> check_batch_right_scalable(
     static_assert(true,                                                        \
                   "This assert is used to counter the false positive extra "   \
                   "semi-colon warnings")
+
+
+/**
+<<<<<<< HEAD
+ * Instantiates a MpiError.
+ *
+ * @param errcode  The error code returned from the MPI routine.
+ */
+#define GKO_MPI_ERROR(_errcode) \
+    ::gko::MpiError(__FILE__, __LINE__, __func__, _errcode)
 
 
 /**
@@ -619,6 +642,15 @@ inline std::tuple<bool, int> check_batch_right_scalable(
  */
 #define GKO_CUSPARSE_ERROR(_errcode) \
     ::gko::CusparseError(__FILE__, __LINE__, __func__, _errcode)
+
+
+/**
+ * Instantiates a CufftError.
+ *
+ * @param errcode  The error code returned from the cuFFT routine.
+ */
+#define GKO_CUFFT_ERROR(_errcode) \
+    ::gko::CufftError(__FILE__, __LINE__, __func__, _errcode)
 
 
 /**
@@ -678,6 +710,20 @@ inline std::tuple<bool, int> check_batch_right_scalable(
 
 
 /**
+ * Asserts that a cuFFT library call completed without errors.
+ *
+ * @param _cufft_call  a library call expression
+ */
+#define GKO_ASSERT_NO_CUFFT_ERRORS(_cufft_call) \
+    do {                                        \
+        auto _errcode = _cufft_call;            \
+        if (_errcode != CUFFT_SUCCESS) {        \
+            throw GKO_CUFFT_ERROR(_errcode);    \
+        }                                       \
+    } while (false)
+
+
+/**
  * Instantiates a HipError.
  *
  * @param errcode  The error code returned from a HIP runtime API routine.
@@ -711,6 +757,15 @@ inline std::tuple<bool, int> check_batch_right_scalable(
  */
 #define GKO_HIPSPARSE_ERROR(_errcode) \
     ::gko::HipsparseError(__FILE__, __LINE__, __func__, _errcode)
+
+
+/**
+ * Instantiates a HipfftError.
+ *
+ * @param errcode  The error code returned from the hipFFT routine.
+ */
+#define GKO_HIPFFT_ERROR(_errcode) \
+    ::gko::HipfftError(__FILE__, __LINE__, __func__, _errcode)
 
 
 /**
@@ -766,6 +821,34 @@ inline std::tuple<bool, int> check_batch_right_scalable(
         if (_errcode != HIPSPARSE_STATUS_SUCCESS) {     \
             throw GKO_HIPSPARSE_ERROR(_errcode);        \
         }                                               \
+    } while (false)
+
+
+/**
+ * Asserts that a hipFFT library call completed without errors.
+ *
+ * @param _hipfft_call  a library call expression
+ */
+#define GKO_ASSERT_NO_HIPFFT_ERRORS(_hipfft_call) \
+    do {                                          \
+        auto _errcode = _hipfft_call;             \
+        if (_errcode != HIPFFT_SUCCESS) {         \
+            throw GKO_HIPFFT_ERROR(_errcode);     \
+        }                                         \
+    } while (false)
+
+
+/**
+ * Asserts that a MPI library call completed without errors.
+ *
+ * @param _mpi_call  a library call expression
+ */
+#define GKO_ASSERT_NO_MPI_ERRORS(_mpi_call) \
+    do {                                    \
+        auto _errcode = _mpi_call;          \
+        if (_errcode != MPI_SUCCESS) {      \
+            throw GKO_MPI_ERROR(_errcode);  \
+        }                                   \
     } while (false)
 
 

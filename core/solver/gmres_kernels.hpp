@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -39,6 +39,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ginkgo/core/base/types.hpp>
 #include <ginkgo/core/matrix/dense.hpp>
 #include <ginkgo/core/stop/stopping_status.hpp>
+
+
+#include "core/base/kernel_declaration.hpp"
 
 
 namespace gko {
@@ -99,49 +102,7 @@ namespace gmres {
 }  // namespace gmres
 
 
-namespace omp {
-namespace gmres {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace gmres
-}  // namespace omp
-
-
-namespace cuda {
-namespace gmres {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace gmres
-}  // namespace cuda
-
-
-namespace reference {
-namespace gmres {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace gmres
-}  // namespace reference
-
-
-namespace hip {
-namespace gmres {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace gmres
-}  // namespace hip
-
-
-namespace dpcpp {
-namespace gmres {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace gmres
-}  // namespace dpcpp
+GKO_DECLARE_FOR_ALL_EXECUTOR_NAMESPACES(gmres, GKO_DECLARE_ALL_AS_TEMPLATES);
 
 
 #undef GKO_DECLARE_ALL_AS_TEMPLATES

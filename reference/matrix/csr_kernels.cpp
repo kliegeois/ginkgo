@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -51,7 +51,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "core/base/allocator.hpp"
 #include "core/base/iterator_factory.hpp"
-#include "core/components/prefix_sum.hpp"
+#include "core/components/prefix_sum_kernels.hpp"
 #include "core/matrix/csr_builder.hpp"
 #include "reference/components/csr_spgeam.hpp"
 #include "reference/components/format_conversion.hpp"
@@ -356,6 +356,23 @@ void spgeam(std::shared_ptr<const ReferenceExecutor> exec,
 GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(GKO_DECLARE_CSR_SPGEAM_KERNEL);
 
 
+template <typename ValueType, typename IndexType>
+void fill_in_matrix_data(
+    std::shared_ptr<const ReferenceExecutor> exec,
+    const Array<matrix_data_entry<ValueType, IndexType>>& nonzeros,
+    matrix::Csr<ValueType, IndexType>* output)
+{
+    for (size_type i = 0; i < nonzeros.get_num_elems(); i++) {
+        const auto nonzero = nonzeros.get_const_data()[i];
+        output->get_col_idxs()[i] = nonzero.column;
+        output->get_values()[i] = nonzero.value;
+    }
+}
+
+GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(
+    GKO_DECLARE_CSR_FILL_IN_MATRIX_DATA_KERNEL);
+
+
 template <typename IndexType>
 void convert_row_ptrs_to_idxs(std::shared_ptr<const ReferenceExecutor> exec,
                               const IndexType* ptrs, size_type num_rows,
@@ -631,6 +648,64 @@ void calculate_max_nnz_per_row(std::shared_ptr<const ReferenceExecutor> exec,
 
 GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(
     GKO_DECLARE_CSR_CALCULATE_MAX_NNZ_PER_ROW_KERNEL);
+
+
+template <typename ValueType, typename IndexType>
+void calculate_nonzeros_per_row_in_span(
+    std::shared_ptr<const DefaultExecutor> exec,
+    const matrix::Csr<ValueType, IndexType>* source, const span& row_span,
+    const span& col_span, Array<IndexType>* row_nnz)
+{
+    size_type res_row = 0;
+    for (size_type row = row_span.begin; row < row_span.end; ++row) {
+        row_nnz->get_data()[res_row] = zero<IndexType>();
+        for (size_type nnz = source->get_const_row_ptrs()[row];
+             nnz < source->get_const_row_ptrs()[row + 1]; ++nnz) {
+            if (source->get_const_col_idxs()[nnz] < col_span.end &&
+                source->get_const_col_idxs()[nnz] >= col_span.begin) {
+                row_nnz->get_data()[res_row]++;
+            }
+        }
+        res_row++;
+    }
+}
+
+GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(
+    GKO_DECLARE_CSR_CALC_NNZ_PER_ROW_IN_SPAN_KERNEL);
+
+
+template <typename ValueType, typename IndexType>
+void compute_submatrix(std::shared_ptr<const DefaultExecutor> exec,
+                       const matrix::Csr<ValueType, IndexType>* source,
+                       gko::span row_span, gko::span col_span,
+                       matrix::Csr<ValueType, IndexType>* result)
+{
+    auto row_offset = row_span.begin;
+    auto col_offset = col_span.begin;
+    auto num_rows = result->get_size()[0];
+    auto num_cols = result->get_size()[1];
+    auto res_row_ptrs = result->get_row_ptrs();
+    auto res_col_idxs = result->get_col_idxs();
+    auto res_values = result->get_values();
+    const auto src_row_ptrs = source->get_const_row_ptrs();
+    const auto src_col_idxs = source->get_const_col_idxs();
+    const auto src_values = source->get_const_values();
+
+    size_type res_nnz = 0;
+    for (size_type nnz = 0; nnz < source->get_num_stored_elements(); ++nnz) {
+        if (nnz >= src_row_ptrs[row_offset] &&
+            nnz < src_row_ptrs[row_offset + num_rows] &&
+            (src_col_idxs[nnz] < (col_offset + num_cols) &&
+             src_col_idxs[nnz] >= col_offset)) {
+            res_col_idxs[res_nnz] = src_col_idxs[nnz] - col_offset;
+            res_values[res_nnz] = src_values[nnz];
+            res_nnz++;
+        }
+    }
+}
+
+GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(
+    GKO_DECLARE_CSR_COMPUTE_SUB_MATRIX_KERNEL);
 
 
 template <typename ValueType, typename IndexType>
@@ -922,6 +997,38 @@ void extract_diagonal(std::shared_ptr<const ReferenceExecutor> exec,
 }
 
 GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(GKO_DECLARE_CSR_EXTRACT_DIAGONAL);
+
+
+template <typename ValueType, typename IndexType>
+void scale(std::shared_ptr<const ReferenceExecutor> exec,
+           const matrix::Dense<ValueType>* alpha,
+           matrix::Csr<ValueType, IndexType>* to_scale)
+{
+    const auto nnz = to_scale->get_num_stored_elements();
+    auto values = to_scale->get_values();
+
+    for (size_type idx = 0; idx < nnz; idx++) {
+        values[idx] *= alpha->at(0, 0);
+    }
+}
+
+GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(GKO_DECLARE_CSR_SCALE_KERNEL);
+
+
+template <typename ValueType, typename IndexType>
+void inv_scale(std::shared_ptr<const ReferenceExecutor> exec,
+               const matrix::Dense<ValueType>* alpha,
+               matrix::Csr<ValueType, IndexType>* to_scale)
+{
+    const auto nnz = to_scale->get_num_stored_elements();
+    auto values = to_scale->get_values();
+
+    for (size_type idx = 0; idx < nnz; idx++) {
+        values[idx] /= alpha->at(0, 0);
+    }
+}
+
+GKO_INSTANTIATE_FOR_EACH_VALUE_AND_INDEX_TYPE(GKO_DECLARE_CSR_INV_SCALE_KERNEL);
 
 
 }  // namespace csr

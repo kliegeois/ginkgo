@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -40,6 +40,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ginkgo/core/base/executor.hpp>
 #include <ginkgo/core/base/types.hpp>
 #include <ginkgo/core/matrix/csr.hpp>
+
+
+#include "core/base/kernel_declaration.hpp"
 
 
 namespace gko {
@@ -96,49 +99,8 @@ namespace kernels {
     GKO_DECLARE_FACTORIZATION_INITIALIZE_L_KERNEL(ValueType, IndexType)
 
 
-namespace omp {
-namespace factorization {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace factorization
-}  // namespace omp
-
-
-namespace cuda {
-namespace factorization {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace factorization
-}  // namespace cuda
-
-
-namespace reference {
-namespace factorization {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace factorization
-}  // namespace reference
-
-
-namespace hip {
-namespace factorization {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace factorization
-}  // namespace hip
-
-
-namespace dpcpp {
-namespace factorization {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace factorization
-}  // namespace dpcpp
+GKO_DECLARE_FOR_ALL_EXECUTOR_NAMESPACES(factorization,
+                                        GKO_DECLARE_ALL_AS_TEMPLATES);
 
 
 #undef GKO_DECLARE_ALL_AS_TEMPLATES

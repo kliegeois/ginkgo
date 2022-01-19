@@ -16,11 +16,10 @@ target_sources(ginkgo_dpcpp
     PRIVATE
     base/executor.dp.cpp
     base/helper.dp.cpp
-    base/version.dp.cpp
-    components/absolute_array.dp.cpp
-    components/fill_array.dp.cpp
-    components/prefix_sum.dp.cpp
-    factorization/factorization_kernels.dp.cpp
+    base/index_set_kernels.dp.cpp
+    components/device_matrix_data_kernels.dp.cpp
+    components/prefix_sum_kernels.dp.cpp
+    distributed/partition_kernels.dp.cpp
     factorization/ic_kernels.dp.cpp
     factorization/ilu_kernels.dp.cpp
     factorization/par_ic_kernels.dp.cpp
@@ -29,12 +28,13 @@ target_sources(ginkgo_dpcpp
     factorization/par_ilut_kernels.dp.cpp
     matrix/batch_csr_kernels.dp.cpp
     matrix/batch_dense_kernels.dp.cpp
+    matrix/batch_ell_kernels.dp.cpp
     matrix/coo_kernels.dp.cpp
     matrix/csr_kernels.dp.cpp
     matrix/dense_kernels.dp.cpp
     matrix/diagonal_kernels.dp.cpp
     matrix/ell_kernels.dp.cpp
-    matrix/fbcsr_kernels.dp.cpp
+    matrix/fft_kernels.dp.cpp
     matrix/hybrid_kernels.dp.cpp
     matrix/sellp_kernels.dp.cpp
     matrix/sparsity_csr_kernels.dp.cpp
@@ -58,25 +58,15 @@ target_sources(ginkgo_dpcpp
     solver/upper_trs_kernels.dp.cpp
     stop/criterion_kernels.dp.cpp
     stop/residual_norm_kernels.dp.cpp
-    ../common/unified/components/precision_conversion.cpp
-    ../common/unified/matrix/coo_kernels.cpp
-    ../common/unified/matrix/csr_kernels.cpp
-    ../common/unified/matrix/dense_kernels.cpp
-    ../common/unified/matrix/diagonal_kernels.cpp
-    ../common/unified/preconditioner/jacobi_kernels.cpp
-    ../common/unified/solver/bicg_kernels.cpp
-    ../common/unified/solver/bicgstab_kernels.cpp
-    ../common/unified/solver/cg_kernels.cpp
-    ../common/unified/solver/cgs_kernels.cpp
-    ../common/unified/solver/fcg_kernels.cpp
-    ../common/unified/solver/ir_kernels.cpp
+    ${GKO_UNIFIED_COMMON_SOURCES}
     )
 
 ginkgo_compile_features(ginkgo_dpcpp)
-target_compile_definitions(ginkgo_dpcpp PRIVATE GKO_COMPILING_DPCPP)
+target_compile_definitions(ginkgo_dpcpp PRIVATE GKO_COMPILING_DPCPP _ONEDPL_COMPILE_KERNEL=0)
 
 set(GINKGO_DPCPP_FLAGS ${GINKGO_DPCPP_FLAGS} PARENT_SCOPE)
 target_compile_options(ginkgo_dpcpp PRIVATE "${GINKGO_DPCPP_FLAGS}")
+target_compile_options(ginkgo_dpcpp PRIVATE "${GINKGO_COMPILER_FLAGS}")
 # Note: add MKL as PRIVATE not PUBLIC (MKL example shows) to avoid propagating
 # find_package(MKL) everywhere when linking ginkgo (see the MKL example
 # https://software.intel.com/content/www/us/en/develop/documentation/onemkl-windows-developer-guide/top/getting-started/cmake-config-for-onemkl.html)

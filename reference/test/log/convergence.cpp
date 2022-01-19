@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -51,7 +51,7 @@ namespace {
 template <typename T>
 class Convergence : public ::testing::Test {};
 
-TYPED_TEST_SUITE(Convergence, gko::test::ValueTypes);
+TYPED_TEST_SUITE(Convergence, gko::test::ValueTypes, TypenameNameGenerator);
 
 
 TYPED_TEST(Convergence, CatchesCriterionCheckCompleted)

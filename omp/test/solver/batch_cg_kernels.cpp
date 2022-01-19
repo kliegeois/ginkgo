@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -64,8 +64,7 @@ protected:
     BatchCg()
         : exec(gko::ReferenceExecutor::create()),
           ompexec(gko::OmpExecutor::create()),
-          sys_1(gko::test::get_poisson_problem<T>(exec, 1, nbatch)),
-          sys_m(gko::test::get_poisson_problem<T>(exec, nrhs, nbatch))
+          sys_1(gko::test::get_poisson_problem<T>(exec, 1, nbatch))
     {
         auto execp = this->ompexec;
         solve_fn = [execp](const Options opts, const Mtx* mtx, const BDense* b,
@@ -102,18 +101,12 @@ protected:
                          static_cast<real_type>(1e1) * eps,
                          gko::stop::batch::ToleranceType::relative};
 
-
-    const int nrhs = 2;
-    const Options opts_m{gko::preconditioner::batch::type::none, 500, eps,
-                         gko::stop::batch::ToleranceType::absolute};
-
     std::function<void(Options, const Mtx*, const BDense*, BDense*, LogData&)>
         solve_fn;
     std::function<void(const BDense*, const BDense*, Mtx*, BDense*)> scale_mat;
     std::function<void(const BDense*, BDense*)> scale_vecs;
 
     gko::test::LinSys<value_type> sys_1;
-    gko::test::LinSys<value_type> sys_m;
 
     std::unique_ptr<typename solver_type::Factory> create_factory(
         std::shared_ptr<const gko::Executor> exec, const Options& opts)
@@ -136,39 +129,32 @@ protected:
             return -1;
         }
     }
-
-    std::vector<int> multiple_iters_regression() const
-    {
-        std::vector<int> iters(2);
-        if (std::is_same<real_type, float>::value) {
-            iters[0] = 3;
-            iters[1] = 3;
-        } else if (std::is_same<real_type, double>::value) {
-            iters[0] = 3;
-            iters[1] = 3;
-        } else {
-            iters[0] = -1;
-            iters[1] = -1;
-        }
-        return iters;
-    }
 };
 
 TYPED_TEST_SUITE(BatchCg, gko::test::ValueTypes);
 
 
-TYPED_TEST(BatchCg, SolvesStencilSystem)
+TYPED_TEST(BatchCg, SolveIsEquivalentToReference)
 {
-    auto r_1 = gko::test::solve_poisson_uniform(
-        this->ompexec, this->solve_fn, this->scale_mat, this->scale_vecs,
-        this->opts_1, this->sys_1, 1);
+    using value_type = typename TestFixture::value_type;
+    using solver_type = gko::solver::BatchCg<value_type>;
+    using mtx_type = typename TestFixture::Mtx;
+    using opts_type = typename TestFixture::Options;
+    constexpr bool issingle =
+        std::is_same<gko::remove_complex<value_type>, float>::value;
+    const float solver_restol = issingle ? 100 * this->eps : this->eps;
+    const opts_type opts{gko::preconditioner::batch::type::none, 500,
+                         solver_restol,
+                         gko::stop::batch::ToleranceType::relative};
+    auto r_sys = gko::test::generate_solvable_batch_system<mtx_type>(
+        this->exec, this->nbatch, 11, 1, true);
+    auto r_factory = this->create_factory(this->exec, opts);
+    const double iter_tol = 0.01;
+    const double res_tol = 10 * r<value_type>::value;
+    const double sol_tol = 10 * solver_restol;
 
-    for (size_t i = 0; i < this->nbatch; i++) {
-        ASSERT_LE(r_1.resnorm->get_const_values()[i] /
-                      this->sys_1.bnorm->get_const_values()[i],
-                  this->opts_1.residual_tol);
-    }
-    GKO_ASSERT_BATCH_MTX_NEAR(r_1.x, this->sys_1.xex, this->eps);
+    gko::test::compare_with_reference<value_type, solver_type>(
+        this->ompexec, r_sys, r_factory.get(), iter_tol, res_tol, sol_tol);
 }
 
 
@@ -192,43 +178,6 @@ TYPED_TEST(BatchCg, StencilSystemLoggerIsCorrect)
                   this->opts_1.residual_tol);
         ASSERT_NEAR(res_log_array[i], r_1.resnorm->get_const_values()[i],
                     10 * this->eps);
-    }
-}
-
-
-TYPED_TEST(BatchCg, SolvesStencilMultipleSystem)
-{
-    auto r_m = gko::test::solve_poisson_uniform(
-        this->ompexec, this->solve_fn, this->scale_mat, this->scale_vecs,
-        this->opts_m, this->sys_m, this->nrhs);
-
-    GKO_ASSERT_BATCH_MTX_NEAR(r_m.x, this->sys_m.xex, this->eps);
-}
-
-
-TYPED_TEST(BatchCg, StencilMultipleSystemLoggerIsCorrect)
-{
-    using value_type = typename TestFixture::value_type;
-    using real_type = gko::remove_complex<value_type>;
-
-    auto r_m = gko::test::solve_poisson_uniform(
-        this->ompexec, this->solve_fn, this->scale_mat, this->scale_vecs,
-        this->opts_m, this->sys_m, this->nrhs);
-
-    const std::vector<int> ref_iters = this->multiple_iters_regression();
-    const int* const iter_array = r_m.logdata.iter_counts.get_const_data();
-    const real_type* const res_log_array =
-        r_m.logdata.res_norms->get_const_values();
-    for (size_t i = 0; i < this->nbatch; i++) {
-        for (size_t j = 0; j < this->nrhs; j++) {
-            GKO_ASSERT((iter_array[i * this->nrhs + j] <= ref_iters[j] + 1) &&
-                       (iter_array[i * this->nrhs + j] >= ref_iters[j] - 1));
-            ASSERT_LE(res_log_array[i * this->nrhs + j],
-                      this->opts_m.residual_tol);
-            ASSERT_NEAR(res_log_array[i * this->nrhs + j],
-                        r_m.resnorm->get_const_values()[i * this->nrhs + j],
-                        10 * this->eps);
-        }
     }
 }
 
@@ -333,6 +282,7 @@ TEST(BatchCg, CanSolveWithoutScaling)
     using T = std::complex<float>;
     using RT = typename gko::remove_complex<T>;
     using Solver = gko::solver::BatchCg<T>;
+    using Mtx = gko::matrix::BatchCsr<T, int>;
     const RT tol = 1e-5;
     std::shared_ptr<gko::ReferenceExecutor> refexec =
         gko::ReferenceExecutor::create();
@@ -345,12 +295,12 @@ TEST(BatchCg, CanSolveWithoutScaling)
             .with_tolerance_type(gko::stop::batch::ToleranceType::relative)
             .with_preconditioner(gko::preconditioner::batch::type::jacobi)
             .on(exec);
-    const int nrows = 40;
+    const int nrows = 43;
     const size_t nbatch = 3;
-    const int nrhs = 5;
+    const int nrhs = 1;
 
-    gko::test::test_solve<Solver>(exec, nbatch, nrows, nrhs, tol, maxits,
-                                  factory.get(), 10);
+    gko::test::test_solve<Solver, Mtx>(exec, nbatch, nrows, nrhs, tol, maxits,
+                                       factory.get(), 10);
 }
 
 }  // namespace

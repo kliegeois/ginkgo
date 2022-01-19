@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -77,7 +77,7 @@ protected:
     }
 };
 
-TYPED_TEST_SUITE(Diagonal, gko::test::ValueTypes);
+TYPED_TEST_SUITE(Diagonal, gko::test::ValueTypes, TypenameNameGenerator);
 
 
 TYPED_TEST(Diagonal, KnowsItsSize)
@@ -109,6 +109,19 @@ TYPED_TEST(Diagonal, CanBeCreatedFromExistingData)
 
     auto diag = gko::matrix::Diagonal<value_type>::create(
         this->exec, 3, gko::Array<value_type>::view(this->exec, 3, values));
+
+    ASSERT_EQ(diag->get_const_values(), values);
+}
+
+
+TYPED_TEST(Diagonal, CanBeCreatedFromExistingConstData)
+{
+    using value_type = typename TestFixture::value_type;
+    const value_type values[] = {1.0, 2.0, 3.0};
+
+    auto diag = gko::matrix::Diagonal<value_type>::create_const(
+        this->exec, 3,
+        gko::Array<value_type>::const_view(this->exec, 3, values));
 
     ASSERT_EQ(diag->get_const_values(), values);
 }
@@ -180,29 +193,7 @@ TYPED_TEST(Diagonal, CannotBeReadFromNonSquareMatrixData)
 
     ASSERT_THROW(m->read(gko::matrix_data<TypeParam>{
                      {3, 4}, {{0, 0, 1.0}, {1, 1, 3.0}, {2, 2, 2.0}}}),
-                 gko::ValueMismatch);
-}
-
-
-TYPED_TEST(Diagonal, ReadFailsForOffDiagonalEntries)
-{
-    using value_type = typename TestFixture::value_type;
-    auto m = gko::matrix::Diagonal<TypeParam>::create(this->exec);
-
-    ASSERT_THROW(m->read(gko::matrix_data<TypeParam>{
-                     {3, 3}, {{0, 0, 1.0}, {1, 2, 3.0}, {2, 2, 2.0}}}),
-                 gko::ValueMismatch);
-}
-
-
-TYPED_TEST(Diagonal, ReadFailsForTooManyEntries)
-{
-    using value_type = typename TestFixture::value_type;
-    auto m = gko::matrix::Diagonal<TypeParam>::create(this->exec);
-
-    ASSERT_THROW(m->read(gko::matrix_data<TypeParam>{
-                     {2, 2}, {{0, 0, 1.0}, {1, 1, 2.0}, {0, 1, 3.0}}}),
-                 gko::ValueMismatch);
+                 gko::DimensionMismatch);
 }
 
 

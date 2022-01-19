@@ -21,6 +21,14 @@ if(NOT DEFINED HIPBLAS_PATH)
     endif()
 endif()
 
+if(NOT DEFINED HIPFFT_PATH)
+    if(DEFINED ENV{HIPFFT_PATH})
+        set(HIPFFT_PATH $ENV{HIPFFT_PATH} CACHE PATH "Path to which HIPFFT has been installed")
+    else()
+        set(HIPFFT_PATH "${ROCM_PATH}/hipfft" CACHE PATH "Path to which HIPFFT has been installed")
+    endif()
+endif()
+
 if(NOT DEFINED HIPRAND_PATH)
     if(DEFINED ENV{HIPRAND_PATH})
         set(HIPRAND_PATH $ENV{HIPRAND_PATH} CACHE PATH "Path to which HIPRAND has been installed")
@@ -114,6 +122,7 @@ if (GINKGO_HIP_PLATFORM MATCHES "${HIP_PLATFORM_AMD_REGEX}")
 endif()
 list(APPEND CMAKE_PREFIX_PATH
     "${HIPBLAS_PATH}/lib/cmake"
+    "${HIPFFT_PATH}/lib/cmake"
     "${HIPRAND_PATH}/lib/cmake"
     "${HIPSPARSE_PATH}/lib/cmake"
     "${ROCRAND_PATH}/lib/cmake"
@@ -132,6 +141,7 @@ set(HIP_HIPCC_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}" CACHE STR
 
 find_package(HIP REQUIRED)
 find_package(hipblas REQUIRED)
+find_package(hipfft) # optional dependency
 find_package(hiprand REQUIRED)
 find_package(hipsparse REQUIRED)
 # At the moment, for hiprand to work also rocrand is required.
@@ -146,10 +156,11 @@ endif()
 set(GINKGO_HIP_SOURCES
     base/exception.hip.cpp
     base/executor.hip.cpp
+    base/index_set_kernels.hip.cpp
     base/version.hip.cpp
-    components/absolute_array.hip.cpp
-    components/fill_array.hip.cpp
-    components/prefix_sum.hip.cpp
+    components/device_matrix_data_kernels.hip.cpp
+    components/prefix_sum_kernels.hip.cpp
+    distributed/partition_kernels.hip.cpp
     factorization/factorization_kernels.hip.cpp
     factorization/ic_kernels.hip.cpp
     factorization/ilu_kernels.hip.cpp
@@ -164,6 +175,7 @@ set(GINKGO_HIP_SOURCES
     factorization/par_ilut_sweep_kernel.hip.cpp
     matrix/batch_csr_kernels.hip.cpp
     matrix/batch_dense_kernels.hip.cpp
+    matrix/batch_ell_kernels.hip.cpp
     matrix/coo_kernels.hip.cpp
     matrix/csr_kernels.hip.cpp
     matrix/dense_kernels.hip.cpp
@@ -196,19 +208,46 @@ set(GINKGO_HIP_SOURCES
     solver/upper_trs_kernels.hip.cpp
     stop/criterion_kernels.hip.cpp
     stop/residual_norm_kernels.hip.cpp
-    ../common/unified/components/precision_conversion.cpp
-    ../common/unified/matrix/coo_kernels.cpp
-    ../common/unified/matrix/csr_kernels.cpp
-    ../common/unified/matrix/dense_kernels.cpp
-    ../common/unified/matrix/diagonal_kernels.cpp
-    ../common/unified/preconditioner/jacobi_kernels.cpp
-    ../common/unified/solver/bicg_kernels.cpp
-    ../common/unified/solver/bicgstab_kernels.cpp
-    ../common/unified/solver/cg_kernels.cpp
-    ../common/unified/solver/cgs_kernels.cpp
-    ../common/unified/solver/fcg_kernels.cpp
-    ../common/unified/solver/ir_kernels.cpp
+    ${GKO_UNIFIED_COMMON_SOURCES}
     )
+
+if(hipfft_FOUND)
+    list(APPEND GINKGO_HIP_SOURCES matrix/fft_kernels.hip.cpp)
+else()
+    list(APPEND GINKGO_HIP_SOURCES matrix/fft_kernels_stub.hip.cpp)
+endif()
+
+if (GINKGO_HIP_PLATFORM MATCHES "${HIP_PLATFORM_NVIDIA_REGEX}")
+    set(GKO_HIP_JACOBI_MAX_BLOCK_SIZE 32)
+else()
+    set(GKO_HIP_JACOBI_MAX_BLOCK_SIZE 64)
+endif()
+if(GINKGO_JACOBI_FULL_OPTIMIZATIONS)
+    set(GKO_HIP_JACOBI_BLOCK_SIZES)
+    foreach(blocksize RANGE 1 ${GKO_HIP_JACOBI_MAX_BLOCK_SIZE})
+        list(APPEND GKO_HIP_JACOBI_BLOCK_SIZES ${blocksize})
+    endforeach()
+else()
+    set(GKO_HIP_JACOBI_BLOCK_SIZES 1 2 4 8 13 16 32 ${GKO_HIP_JACOBI_MAX_BLOCK_SIZE})
+    list(REMOVE_DUPLICATES GKO_HIP_JACOBI_BLOCK_SIZES)
+endif()
+foreach(GKO_JACOBI_BLOCK_SIZE IN LISTS GKO_HIP_JACOBI_BLOCK_SIZES)
+    configure_file(
+        preconditioner/jacobi_generate_instantiate.inc.hip.cpp
+        preconditioner/jacobi_generate_instantiate.${GKO_JACOBI_BLOCK_SIZE}.hip.cpp)
+    configure_file(
+        preconditioner/jacobi_simple_apply_instantiate.inc.hip.cpp
+        preconditioner/jacobi_simple_apply_instantiate.${GKO_JACOBI_BLOCK_SIZE}.hip.cpp)
+    configure_file(
+        preconditioner/jacobi_advanced_apply_instantiate.inc.hip.cpp
+        preconditioner/jacobi_advanced_apply_instantiate.${GKO_JACOBI_BLOCK_SIZE}.hip.cpp)
+    list(APPEND GINKGO_HIP_SOURCES
+        ${CMAKE_CURRENT_BINARY_DIR}/preconditioner/jacobi_generate_instantiate.${GKO_JACOBI_BLOCK_SIZE}.hip.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/preconditioner/jacobi_simple_apply_instantiate.${GKO_JACOBI_BLOCK_SIZE}.hip.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/preconditioner/jacobi_advanced_apply_instantiate.${GKO_JACOBI_BLOCK_SIZE}.hip.cpp)
+endforeach()
+string(REPLACE ";" "," GKO_HIP_JACOBI_BLOCK_SIZES_CODE "${GKO_HIP_JACOBI_BLOCK_SIZES}")
+configure_file(preconditioner/jacobi_common.hip.hpp.in preconditioner/jacobi_common.hip.hpp)
 
 set(GINKGO_HIP_NVCC_ARCH "")
 if (GINKGO_HIP_PLATFORM MATCHES "${HIP_PLATFORM_NVIDIA_REGEX}")
@@ -264,14 +303,19 @@ target_include_directories(ginkgo_hip
     PUBLIC
         ${HIP_INCLUDE_DIRS}
     PRIVATE
+        ${CMAKE_CURRENT_BINARY_DIR}/.. # for generated headers like jacobi_common.hip.hpp
         ${GINKGO_HIP_THRUST_PATH}
         ${HIPBLAS_INCLUDE_DIRS}
+        ${HIPFFT_INCLUDE_DIRS}
         ${hiprand_INCLUDE_DIRS}
         ${HIPSPARSE_INCLUDE_DIRS}
         $<BUILD_INTERFACE:${ROCPRIM_INCLUDE_DIRS}>)
 
 target_link_libraries(ginkgo_hip PUBLIC ginkgo_device)
 target_link_libraries(ginkgo_hip PRIVATE roc::hipblas roc::hipsparse hip::hiprand roc::rocrand)
+if (hipfft_FOUND)
+    target_link_libraries(ginkgo_hip PRIVATE hip::hipfft)
+endif()
 
 target_compile_options(ginkgo_hip PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${GINKGO_COMPILER_FLAGS}>)
 

@@ -36,6 +36,7 @@ option(GINKGO_BUILD_EXAMPLES "Build Ginkgo's examples" ON)
 option(GINKGO_BUILD_BENCHMARKS "Build Ginkgo's benchmarks" ON)
 option(GINKGO_BUILD_REFERENCE "Compile reference CPU kernels" ON)
 option(GINKGO_BUILD_OMP "Compile OpenMP kernels for CPU" ${GINKGO_HAS_OMP})
+option(GINKGO_BUILD_MPI "Compile the MPI module" ${GINKGO_HAS_MPI})
 option(GINKGO_BUILD_DPCPP
     "Compile DPC++ kernels for Intel GPUs or other DPC++ enabled hardware" ${GINKGO_HAS_DPCPP})
 option(GINKGO_BUILD_CUDA "Compile kernels for NVIDIA GPUs" ${GINKGO_HAS_CUDA})
@@ -67,7 +68,8 @@ if(MSVC)
 elseif(GINKGO_BUILD_DPCPP OR CMAKE_CXX_COMPILER MATCHES "dpcpp")
     # For now always use `-ffp-model=precise` with DPC++. This can be removed when
     # the floating point issues are fixed.
-    set(GINKGO_COMPILER_FLAGS "-Wpedantic;-ffp-model=precise" CACHE STRING
+    # -sycl-std=1.2.1 (or -sycl-std=2017) is temporary workaround after 2021.4 to propagate subgroup setting correctly
+    set(GINKGO_COMPILER_FLAGS "-Wpedantic;-ffp-model=precise;-sycl-std=1.2.1" CACHE STRING
         "Set the required CXX compiler flags, mainly used for warnings. Current default is `-Wpedantic;-ffp-model=precise`")
 else()
     set(GINKGO_COMPILER_FLAGS "-Wpedantic" CACHE STRING
@@ -126,7 +128,7 @@ if(GINKGO_BENCHMARK_ENABLE_TUNING)
     set(GINKGO_BUILD_EXAMPLES OFF)
 endif()
 
-if(GINKGO_BUILD_TESTS AND (GINKGO_BUILD_CUDA OR GINKGO_BUILD_OMP OR GINKGO_BUILD_HIP OR GINKGO_BUILD_DPCPP))
+if(GINKGO_BUILD_TESTS)
     message(STATUS "GINKGO_BUILD_TESTS is ON, enabling GINKGO_BUILD_REFERENCE")
     set(GINKGO_BUILD_REFERENCE ON CACHE BOOL "Compile reference CPU kernels" FORCE)
 endif()
@@ -196,6 +198,10 @@ else()
     message(STATUS "HWLOC is being forcibly switched off")
 endif()
 
+if(GINKGO_BUILD_MPI)
+    find_package(MPI REQUIRED)
+endif()
+
 # We keep using NVCC/HCC for consistency with previous releases even if AMD
 # updated everything to use NVIDIA/AMD in ROCM 4.1
 set(GINKGO_HIP_PLATFORM_NVCC 0)
@@ -255,6 +261,7 @@ configure_file(${Ginkgo_SOURCE_DIR}/include/ginkgo/config.hpp.in
 # Needs to be first in order for `CMAKE_CUDA_DEVICE_LINK_EXECUTABLE` to be
 # propagated to the other parts of Ginkgo in case of building as static libraries
 add_subdirectory(devices)        # Basic device functionalities. Always compiled.
+add_subdirectory(common)         # Import list of unified kernel source files
 if(GINKGO_BUILD_CUDA)
     add_subdirectory(cuda)       # High-performance kernels for NVIDIA GPUs
 endif()

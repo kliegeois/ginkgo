@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -81,7 +81,7 @@ protected:
     std::unique_ptr<Mtx> mtx2;
 };
 
-TYPED_TEST_SUITE(Sellp, gko::test::ValueIndexTypes);
+TYPED_TEST_SUITE(Sellp, gko::test::ValueIndexTypes, PairTypenameNameGenerator);
 
 
 TYPED_TEST(Sellp, AppliesToDenseVector)
@@ -789,7 +789,8 @@ protected:
     using Mtx = gko::matrix::Sellp<value_type, index_type>;
 };
 
-TYPED_TEST_SUITE(SellpComplex, gko::test::ComplexValueIndexTypes);
+TYPED_TEST_SUITE(SellpComplex, gko::test::ComplexValueIndexTypes,
+                 PairTypenameNameGenerator);
 
 
 TYPED_TEST(SellpComplex, OutplaceAbsolute)

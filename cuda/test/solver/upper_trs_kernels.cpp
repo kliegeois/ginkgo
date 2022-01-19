@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -128,12 +128,25 @@ TEST_F(UpperTrs, CudaUpperTrsFlagCheckIsCorrect)
     bool trans_flag = true;
     bool expected_flag = false;
 
-#if (defined(CUDA_VERSION) && (CUDA_VERSION < 9020))
-    expected_flag = true;
-#endif  // (defined(CUDA_VERSION) && (CUDA_VERSION < 9020))
     gko::kernels::cuda::upper_trs::should_perform_transpose(cuda, trans_flag);
 
     ASSERT_EQ(expected_flag, trans_flag);
+}
+
+
+TEST_F(UpperTrs, CudaSingleRhsApplyClassicalIsEquivalentToRef)
+{
+    initialize_data(50, 1);
+    auto upper_trs_factory = gko::solver::UpperTrs<>::build().on(ref);
+    auto d_upper_trs_factory = gko::solver::UpperTrs<>::build().on(cuda);
+    d_csr_mtx->set_strategy(std::make_shared<CsrMtx::classical>());
+    auto solver = upper_trs_factory->generate(csr_mtx);
+    auto d_solver = d_upper_trs_factory->generate(d_csr_mtx);
+
+    solver->apply(b2.get(), x.get());
+    d_solver->apply(d_b2.get(), d_x.get());
+
+    GKO_ASSERT_MTX_NEAR(d_x, x, 1e-14);
 }
 
 
@@ -152,6 +165,27 @@ TEST_F(UpperTrs, CudaSingleRhsApplyIsEquivalentToRef)
 }
 
 
+TEST_F(UpperTrs, CudaMultipleRhsApplyClassicalIsEquivalentToRef)
+{
+    initialize_data(50, 3);
+    auto upper_trs_factory =
+        gko::solver::UpperTrs<>::build().with_num_rhs(3u).on(ref);
+    auto d_upper_trs_factory =
+        gko::solver::UpperTrs<>::build().with_num_rhs(3u).on(cuda);
+    d_csr_mtx->set_strategy(std::make_shared<CsrMtx::classical>());
+    auto solver = upper_trs_factory->generate(csr_mtx);
+    auto d_solver = d_upper_trs_factory->generate(d_csr_mtx);
+    auto db2_strided = Mtx::create(cuda, b->get_size(), 4);
+    d_b2->convert_to(db2_strided.get());
+    auto dx_strided = Mtx::create(cuda, x->get_size(), 5);
+
+    solver->apply(b2.get(), x.get());
+    d_solver->apply(db2_strided.get(), dx_strided.get());
+
+    GKO_ASSERT_MTX_NEAR(dx_strided, x, 1e-14);
+}
+
+
 TEST_F(UpperTrs, CudaMultipleRhsApplyIsEquivalentToRef)
 {
     initialize_data(50, 3);
@@ -161,11 +195,20 @@ TEST_F(UpperTrs, CudaMultipleRhsApplyIsEquivalentToRef)
         gko::solver::UpperTrs<>::build().with_num_rhs(3u).on(cuda);
     auto solver = upper_trs_factory->generate(csr_mtx);
     auto d_solver = d_upper_trs_factory->generate(d_csr_mtx);
+    auto db2_strided = Mtx::create(cuda, b->get_size(), 4);
+    d_b2->convert_to(db2_strided.get());
+    // The cuSPARSE Generic SpSM implementation uses the wrong stride here
+    // so the input and output stride need to match
+#if CUDA_VERSION >= 11030
+    auto dx_strided = Mtx::create(cuda, x->get_size(), 4);
+#else
+    auto dx_strided = Mtx::create(cuda, x->get_size(), 5);
+#endif
 
     solver->apply(b2.get(), x.get());
-    d_solver->apply(d_b2.get(), d_x.get());
+    d_solver->apply(db2_strided.get(), dx_strided.get());
 
-    GKO_ASSERT_MTX_NEAR(d_x, x, 1e-14);
+    GKO_ASSERT_MTX_NEAR(dx_strided, x, 1e-14);
 }
 
 

@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -176,7 +176,7 @@ protected:
     std::unique_ptr<Bj> adaptive_bj;
 };
 
-TYPED_TEST_SUITE(Jacobi, gko::test::ValueIndexTypes);
+TYPED_TEST_SUITE(Jacobi, gko::test::ValueIndexTypes, PairTypenameNameGenerator);
 
 
 TYPED_TEST(Jacobi, GeneratesCorrectStorageScheme)

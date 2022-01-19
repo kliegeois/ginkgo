@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -44,6 +44,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ginkgo/core/matrix/csr.hpp>
 #include <ginkgo/core/matrix/dense.hpp>
 #include <ginkgo/core/matrix/diagonal.hpp>
+
+
+#include "core/base/kernel_declaration.hpp"
 
 
 namespace gko {
@@ -94,49 +97,7 @@ namespace amgx_pgm {
 }  // namespace amgx_pgm
 
 
-namespace omp {
-namespace amgx_pgm {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace amgx_pgm
-}  // namespace omp
-
-
-namespace cuda {
-namespace amgx_pgm {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace amgx_pgm
-}  // namespace cuda
-
-
-namespace reference {
-namespace amgx_pgm {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace amgx_pgm
-}  // namespace reference
-
-
-namespace hip {
-namespace amgx_pgm {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace amgx_pgm
-}  // namespace hip
-
-
-namespace dpcpp {
-namespace amgx_pgm {
-
-GKO_DECLARE_ALL_AS_TEMPLATES;
-
-}  // namespace amgx_pgm
-}  // namespace dpcpp
+GKO_DECLARE_FOR_ALL_EXECUTOR_NAMESPACES(amgx_pgm, GKO_DECLARE_ALL_AS_TEMPLATES);
 
 
 #undef GKO_DECLARE_ALL_AS_TEMPLATES

@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -166,7 +166,7 @@ bool validate(sycl::queue* queue, unsigned workgroup_size,
  * @return the first valid config
  */
 template <typename IterArr, typename Validate>
-std::uint32_t get_first_cfg(IterArr& arr, Validate verify)
+std::uint32_t get_first_cfg(const IterArr& arr, Validate verify)
 {
     for (auto& cfg : arr) {
         if (verify(cfg)) {

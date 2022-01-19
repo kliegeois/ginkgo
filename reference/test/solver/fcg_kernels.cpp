@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -151,7 +151,7 @@ protected:
     std::unique_ptr<typename Solver::Factory> fcg_factory_big2;
 };
 
-TYPED_TEST_SUITE(Fcg, gko::test::ValueTypes);
+TYPED_TEST_SUITE(Fcg, gko::test::ValueTypes, TypenameNameGenerator);
 
 
 TYPED_TEST(Fcg, KernelInitialize)

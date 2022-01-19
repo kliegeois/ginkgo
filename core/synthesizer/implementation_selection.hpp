@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -68,7 +68,10 @@ namespace syn {
             _name(::gko::syn::value_list<int, Rest...>(), is_eligible,       \
                   int_args, type_args, std::forward<InferredArgs>(args)...); \
         }                                                                    \
-    }
+    }                                                                        \
+    static_assert(true,                                                      \
+                  "This assert is used to counter the false positive extra " \
+                  "semi-colon warnings")
 
 #define GKO_ENABLE_IMPLEMENTATION_CONFIG_SELECTION(_name, _callable)         \
     template <typename Predicate, bool... BoolArgs, int... IntArgs,          \

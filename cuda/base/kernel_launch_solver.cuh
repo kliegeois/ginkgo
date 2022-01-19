@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -43,10 +43,10 @@ namespace cuda {
 
 template <typename KernelFunction, typename... KernelArgs>
 __global__ __launch_bounds__(default_block_size) void generic_kernel_2d_solver(
-    size_type rows, size_type cols, size_type default_stride, KernelFunction fn,
+    int64 rows, int64 cols, int64 default_stride, KernelFunction fn,
     KernelArgs... args)
 {
-    auto tidx = thread::get_thread_id_flat();
+    auto tidx = thread::get_thread_id_flat<int64>();
     auto col = tidx % cols;
     auto row = tidx / cols;
     if (row >= rows) {
@@ -62,11 +62,14 @@ void run_kernel_solver(std::shared_ptr<const CudaExecutor> exec,
                        KernelFunction fn, dim<2> size, size_type default_stride,
                        KernelArgs&&... args)
 {
-    gko::cuda::device_guard guard{exec->get_device_id()};
-    constexpr auto block_size = default_block_size;
-    auto num_blocks = ceildiv(size[0] * size[1], block_size);
-    generic_kernel_2d_solver<<<num_blocks, block_size>>>(
-        size[0], size[1], default_stride, fn, map_to_device(args)...);
+    if (size[0] * size[1] > 0) {
+        gko::cuda::device_guard guard{exec->get_device_id()};
+        constexpr auto block_size = default_block_size;
+        auto num_blocks = ceildiv(size[0] * size[1], block_size);
+        generic_kernel_2d_solver<<<num_blocks, block_size>>>(
+            static_cast<int64>(size[0]), static_cast<int64>(size[1]),
+            static_cast<int64>(default_stride), fn, map_to_device(args)...);
+    }
 }
 
 

@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -34,6 +34,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 #include <ginkgo/core/matrix/batch_csr.hpp>
+#include <ginkgo/core/matrix/batch_ell.hpp>
 
 
 #include "core/matrix/batch_struct.hpp"
@@ -48,13 +49,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace gko {
 namespace kernels {
 namespace cuda {
-
-
 namespace batch_jacobi {
 
 
 constexpr int default_block_size = 128;
-// constexpr int sm_multiplier = 4;
 
 
 #include "common/cuda_hip/components/uninitialized_array.hpp.inc"
@@ -63,9 +61,29 @@ constexpr int default_block_size = 128;
 
 template <typename ValueType>
 void batch_jacobi_apply(std::shared_ptr<const gko::CudaExecutor> exec,
-                        const matrix::BatchCsr<ValueType> *const a,
-                        const matrix::BatchDense<ValueType> *const b,
-                        matrix::BatchDense<ValueType> *const x)
+                        const matrix::BatchEll<ValueType>* const a,
+                        const matrix::BatchDense<ValueType>* const b,
+                        matrix::BatchDense<ValueType>* const x)
+{
+    const auto a_ub = get_batch_struct(a);
+    const auto b_ub = get_batch_struct(b);
+    const auto x_ub = get_batch_struct(x);
+    const size_type nbatch = a->get_num_batch_entries();
+    const int shared_size =
+        BatchJacobi<ValueType>::dynamic_work_size(a_ub.num_rows, a_ub.num_nnz) *
+        sizeof(ValueType);
+    batch_jacobi<<<nbatch, default_block_size, shared_size>>>(
+        BatchJacobi<cuda_type<ValueType>>(), a_ub, b_ub, x_ub);
+}
+
+GKO_INSTANTIATE_FOR_EACH_VALUE_TYPE(GKO_DECLARE_BATCH_JACOBI_ELL_KERNEL);
+
+
+template <typename ValueType>
+void batch_jacobi_apply(std::shared_ptr<const gko::CudaExecutor> exec,
+                        const matrix::BatchCsr<ValueType>* const a,
+                        const matrix::BatchDense<ValueType>* const b,
+                        matrix::BatchDense<ValueType>* const x)
 {
     const auto a_ub = get_batch_struct(a);
     const auto b_ub = get_batch_struct(b);

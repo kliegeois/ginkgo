@@ -1,5 +1,5 @@
 /*******************************<GINKGO LICENSE>******************************
-Copyright (c) 2017-2021, the Ginkgo authors
+Copyright (c) 2017-2022, the Ginkgo authors
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -44,6 +44,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ginkgo/core/stop/criterion.hpp>
 
 
+#include "core/base/kernel_declaration.hpp"
+
+
 namespace gko {
 namespace kernels {
 namespace overhead {
@@ -73,49 +76,7 @@ namespace overhead {
 }  // namespace overhead
 
 
-namespace omp {
-namespace overhead {
-
-GKO_DECLARE_ALL;
-
-}  // namespace overhead
-}  // namespace omp
-
-
-namespace cuda {
-namespace overhead {
-
-GKO_DECLARE_ALL;
-
-}  // namespace overhead
-}  // namespace cuda
-
-
-namespace reference {
-namespace overhead {
-
-GKO_DECLARE_ALL;
-
-}  // namespace overhead
-}  // namespace reference
-
-
-namespace hip {
-namespace overhead {
-
-GKO_DECLARE_ALL;
-
-}  // namespace overhead
-}  // namespace hip
-
-
-namespace dpcpp {
-namespace overhead {
-
-GKO_DECLARE_ALL;
-
-}  // namespace overhead
-}  // namespace dpcpp
+GKO_DECLARE_FOR_ALL_EXECUTOR_NAMESPACES(overhead, GKO_DECLARE_ALL);
 
 
 #undef GKO_DECLARE_ALL
